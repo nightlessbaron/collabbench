@@ -127,7 +127,10 @@ MIGRATION = Migration(
     drop=[".github/*"],
     targets=None,
     test_timeout_s=1200,
+    # Six snapshots per label give the trace speedup, time_to_score and overrun need; the kit's deadline-bounded
+    # grading keeps the verifier within its timeout.
     spec_kwargs=dict(base_image=IMAGE, pip_packages=PIP, env_dockerfile=STUB, tests_dockerfile=STUB, cpus=2,
-                     memory_mb=4096, verifier_timeout_s=5400, max_snapshots_per_label=1, score_workers=2,
+                     memory_mb=4096, verifier_timeout_s=5400, max_snapshots_per_label=6, score_workers=2,
                      score_timeout_s=1500),
+    naive_probe_reward=0.0,  # runs/gates/ormar-pydantic2-naive--gate-oracle--20261115-051805: 0 of 450 pinned tests
 )

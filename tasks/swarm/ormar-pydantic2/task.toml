@@ -15,6 +15,7 @@ prs = ["https://github.com/ormar-orm/ormar/pull/1238"]
 kind = "pydantic v1 -> v2"
 oracle_min = 0.98
 reference_files = 66
+naive_probe_reward = 0.0
 
 [agent]
 timeout_sec = 7200.0

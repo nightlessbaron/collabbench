@@ -89,6 +89,9 @@ class Migration:
     hidden_conftest: str | None = None  # replaces the kit's hidden/conftest.py
     test_timeout_s: int = 900
     spec_kwargs: dict = field(default_factory=dict)  # images, resources, verifier caps
+    # The line-local regex probe's score, measured on Modal: the oracle reward of the gate of the variant that
+    # `python -m collabbench.tracks.swarm.real naive <task>` writes, on the pinned tests (must be <= 0.4).
+    naive_probe_reward: float | None = None
 
     # --- upstream access (git only) ---------------------------------------------------------------------------------
     def repo(self) -> Path:
@@ -191,7 +194,9 @@ When you finish, report for each requirement whether it is met.
             agent_timeout_s=kwargs.pop("agent_timeout_s", 7200), expected_tests="collect",
             extra_metadata={"upstream": self.url, "parent": self.parent, "after": self.after, "prs": self.prs,
                             "kind": "pydantic v1 -> v2", "oracle_min": 0.98,
-                            "reference_files": len(self.changed_sources())},
+                            "reference_files": len(self.changed_sources()),
+                            **({"naive_probe_reward": self.naive_probe_reward}
+                               if self.naive_probe_reward is not None else {})},
             **kwargs)
 
     def write(self, out: Path) -> Path:

@@ -19,12 +19,15 @@ Three decisions that apply during the migration (they are not in the migration g
 
 Requirements:
 
-- R1 (core documents): emmet-core document models (materials, thermo, elasticity, electronic structure, XRD, robocrys, optimade, provenance, settings, ...) validate, build and dump under pydantic 2; covered by emmet-core/tests (top level and mobility/)
-- R2 (core VASP): emmet-core's VASP task, calculation and validation documents (`emmet/core/vasp`); covered by emmet-core/tests/vasp
-- R3 (core molecules and Q-Chem): emmet-core's molecule and Q-Chem documents (`emmet/core/molecules`, `emmet/core/qchem`); covered by emmet-core/tests/molecules and qchem
-- R4 (builders): emmet-builders' builders run on pydantic 2 documents with maggma stores; covered by emmet-builders/tests
-- R5 (API materials): emmet-api's materials resources and query operators; covered by emmet-api/tests/materials
-- R6 (API molecules and core): emmet-api's molecules (and legacy molecules) resources and query operators, and its core: the MAPI app, settings, consumer and general-store resources; covered by emmet-api/tests outside materials/
+- R1 (core diffraction and spectra): emmet-core's XRD and X-ray absorption documents (`emmet/core/xrd.py`, `absorption.py`, `spectrum.py`) validate, build and dump under pydantic 2; covered by emmet-core/tests/test_xrd.py and test_absorption.py
+- R2 (core structure analysis): emmet-core's structure-derived documents: chemical environments, oxidation states, robocrystallographer, structure groups, magnetism, dielectric and piezoelectric, structure and molecule metadata, OPTIMADE; covered by the matching emmet-core/tests/test_*.py
+- R3 (core calculations and properties): emmet-core's calculation and task documents (`emmet/core/tasks.py`, `vasp/calculation.py`) and the property documents built from them: electronic structure, elasticity, thermo, electrodes, ML, mobility; covered by the matching emmet-core/tests/test_*.py and mobility/
+- R4 (core identifiers, settings and utilities): emmet-core's shared foundations: the MPID and MPculeID types, settings, utilities and provenance (`emmet/core/mpid.py`, `settings.py`, `utils.py`, `provenance.py`); covered by the matching tests
+- R5 (core VASP): emmet-core's VASP task, calculation and validation documents (`emmet/core/vasp`); covered by emmet-core/tests/vasp
+- R6 (core molecules and Q-Chem): emmet-core's molecule and Q-Chem documents (`emmet/core/molecules`, `emmet/core/qchem`); covered by emmet-core/tests/molecules and qchem
+- R7 (builders): emmet-builders' builders run on pydantic 2 documents with maggma stores; covered by emmet-builders/tests
+- R8 (API materials): emmet-api's materials resources and query operators; covered by emmet-api/tests/materials
+- R9 (API molecules and core): emmet-api's molecules (and legacy molecules) resources and query operators, and its core: the MAPI app, settings, consumer and general-store resources; covered by emmet-api/tests outside materials/
 - F1, F2, F3: as stated above.
 
 Do not run `scripts/release.sh`; the user releases after review.

@@ -139,23 +139,44 @@ FACT_EDITS = {
     ],
 }
 
+def _core(*modules: str) -> list[str]:
+    return [f"emmet-core.tests.{m}::" for m in modules]
+
+
+# emmet-core's top-level documents are split by module so that no area holds more than about a third of the pinned
+# tests (pinned per area when split: 50, 53, 39, 9, then 9, 14, 26, 30, 10).
 AREAS = [
-    Area("R1", "core documents", ["emmet-core.tests.test_", "emmet-core.tests.mobility."],
-         "emmet-core document models (materials, thermo, elasticity, electronic structure, XRD, robocrys, optimade, "
-         "provenance, settings, ...) validate, build and dump under pydantic 2; covered by emmet-core/tests (top "
-         "level and mobility/)"),
-    Area("R2", "core VASP", ["emmet-core.tests.vasp."],
+    Area("R1", "core diffraction and spectra", _core("test_xrd", "test_absorption"),
+         "emmet-core's XRD and X-ray absorption documents (`emmet/core/xrd.py`, `absorption.py`, `spectrum.py`) "
+         "validate, build and dump under pydantic 2; covered by emmet-core/tests/test_xrd.py and test_absorption.py"),
+    Area("R2", "core structure analysis",
+         _core("test_chemenv", "test_oxidation_states", "test_robocrys", "test_structure_group", "test_magnetism",
+               "test_polar", "test_structure_metadata", "test_molecule_metadata", "test_optimade"),
+         "emmet-core's structure-derived documents: chemical environments, oxidation states, robocrystallographer, "
+         "structure groups, magnetism, dielectric and piezoelectric, structure and molecule metadata, OPTIMADE; "
+         "covered by the matching emmet-core/tests/test_*.py"),
+    Area("R3", "core calculations and properties",
+         _core("test_calculation", "test_task", "test_electronic_structure", "test_elasticity", "test_thermo",
+               "test_electrodes", "test_ml") + ["emmet-core.tests.mobility."],
+         "emmet-core's calculation and task documents (`emmet/core/tasks.py`, `vasp/calculation.py`) and the "
+         "property documents built from them: electronic structure, elasticity, thermo, electrodes, ML, mobility; "
+         "covered by the matching emmet-core/tests/test_*.py and mobility/"),
+    Area("R4", "core identifiers, settings and utilities",
+         _core("test_mpid", "test_utils", "test_settings", "test_provenance"),
+         "emmet-core's shared foundations: the MPID and MPculeID types, settings, utilities and provenance "
+         "(`emmet/core/mpid.py`, `settings.py`, `utils.py`, `provenance.py`); covered by the matching tests"),
+    Area("R5", "core VASP", ["emmet-core.tests.vasp."],
          "emmet-core's VASP task, calculation and validation documents (`emmet/core/vasp`); covered by "
          "emmet-core/tests/vasp"),
-    Area("R3", "core molecules and Q-Chem", ["emmet-core.tests.molecules.", "emmet-core.tests.qchem."],
+    Area("R6", "core molecules and Q-Chem", ["emmet-core.tests.molecules.", "emmet-core.tests.qchem."],
          "emmet-core's molecule and Q-Chem documents (`emmet/core/molecules`, `emmet/core/qchem`); covered by "
          "emmet-core/tests/molecules and qchem"),
-    Area("R4", "builders", ["emmet-builders.tests."],
+    Area("R7", "builders", ["emmet-builders.tests."],
          "emmet-builders' builders run on pydantic 2 documents with maggma stores; covered by emmet-builders/tests"),
-    Area("R5", "API materials", ["emmet-api.tests.materials."],
+    Area("R8", "API materials", ["emmet-api.tests.materials."],
          "emmet-api's materials resources and query operators; covered by emmet-api/tests/materials"),
     # One area for the API's molecules and core: after fail-to-pass pinning the core alone keeps a single test.
-    Area("R6", "API molecules and core", ["emmet-api.tests.molecules.", "emmet-api.tests.legacy.",
+    Area("R9", "API molecules and core", ["emmet-api.tests.molecules.", "emmet-api.tests.legacy.",
                                           "emmet-api.tests.core.", "emmet-api.tests._consumer.",
                                           "emmet-api.tests._general_store.", "emmet-api.tests.test_"],
          "emmet-api's molecules (and legacy molecules) resources and query operators, and its core: the MAPI app, "
@@ -209,7 +230,8 @@ MIGRATION = Migration(
                      tests_dockerfile=f"{FETCH_DATA}\n{STUBS}\nRUN mkdir -p /tests/hidden && ln -s {DATA} "
                                       f"/tests/hidden/test_files",
                      workspace_setup=f"ln -s {DATA} test_files", cpus=2, memory_mb=4096, verifier_timeout_s=7200,
-                     max_snapshots_per_label=1, score_workers=2, score_timeout_s=2400),
+                     max_snapshots_per_label=6, score_workers=2, score_timeout_s=2400),
+    naive_probe_reward=0.06995884773662552,  # runs/gates/emmet-pydantic2-naive--gate-oracle--20261115-051901: 17/243
 )
 
 

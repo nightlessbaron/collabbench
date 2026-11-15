@@ -142,11 +142,9 @@ def test_line_local_regex_scores_low(task, applied):
     assert len(naive) >= 10
     same = [p for p in reference if p in naive and naive[p] == (applied / p).read_text()]
     assert len(same) <= 0.5 * len(reference), same
-    measured = collab(task).get("naive_probe_reward")
-    if measured is None:
-        pytest.skip(f"measure at gate: python -m collabbench.tracks.swarm.real naive tasks/swarm/{task.name}, then "
-                    f"collabbench gate runs/naive/{task.name}-naive (oracle reward = probe score)")
-    assert measured <= 0.4
+    # Measured on Modal: the oracle reward of `collabbench gate runs/naive/<slug>-naive`, on the pinned tests.
+    assert "naive_probe_reward" in collab(task), "record the probe gate's oracle reward in the builder"
+    assert 0.0 <= collab(task)["naive_probe_reward"] <= 0.4
 
 
 def test_requirements_cover_tests(task):
@@ -311,3 +309,22 @@ def test_emmet_verifier_finds_test_data_and_openbabel(tmp_path):
     assert out.stdout.strip() == str(task / "tests" / "hidden" / "test_files")
     for dockerfile in (task / "environment" / "Dockerfile", task / "tests" / "Dockerfile"):
         assert re.search(r"\bopenbabel-wheel==3\.1\.1\.\d+", dockerfile.read_text())
+
+
+def test_no_area_dominates_the_reward(task):
+    """Reward is the pinned-test fraction and a requirement is met only when all its tests pass, so no area may hold
+    more than about a third of the pinned tests."""
+    areas = json.loads((task / "tests" / "hidden" / "areas.json").read_text())
+    pinned = json.loads((task / "tests" / "hidden" / "expected_tests.json").read_text())
+    assert pinned != "collect"
+    sizes = {}
+    for key in pinned:
+        [rid] = area_of(key, areas)
+        sizes[rid] = sizes.get(rid, 0) + 1
+    assert max(sizes.values()) <= 0.35 * len(pinned), sizes
+
+
+def test_grading_keeps_a_snapshot_trace(task):
+    """Six snapshots per label keep enough trace points for speedup, time_to_score and overrun."""
+    config = json.loads((task / "tests" / "grade_config.json").read_text())
+    assert config["max_snapshots_per_label"] == 6
