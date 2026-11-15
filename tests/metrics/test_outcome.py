@@ -42,7 +42,16 @@ def test_cvc_none_when_degenerate():
 
 
 def test_time_to_score():
-    trace = [{"t": 30, "reward": 0.5}, {"t": 10, "reward": 0.25}, {"t": 60, "reward": 1.0}]
+    trace = [{"t": 30, "reward": 0.5, "label": "workspace"}, {"t": 10, "reward": 0.25, "label": "workspace"},
+             {"t": 60, "reward": 1.0, "label": "workspace"}]
     assert time_to_score(trace, 0.5) == 30
     assert time_to_score(trace, 1.0) == 60
     assert time_to_score(trace[:1], 1.0) is None
+
+
+def test_time_to_score_reads_only_graded_clean_rows():
+    trace = [{"t": 5, "reward": 1.0, "label": "agent-1"},                      # a worktree copy, not the deliverable
+             {"t": 8, "reward": 0.0, "label": "workspace", "error": "boom"},
+             {"t": 20, "reward": 1.0, "label": "workspace"}]
+    assert time_to_score(trace, 1.0) == 20
+    assert time_to_score(trace[:2], 0.0) is None  # an error row's fallback 0.0 is not a score

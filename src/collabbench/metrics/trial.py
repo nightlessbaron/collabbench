@@ -5,7 +5,6 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-from collabbench.harness.events import EventLog
 
 
 @dataclass
@@ -24,10 +23,36 @@ class TrialRecord:
     tokens: int = 0
     wall_s: float = 0.0
     infra_error: bool = False
+    bad_event_lines: int = 0
+
+
+GRADED_LABEL = "workspace"  # the snapshot label of /workspace, the directory the verifier grades
+
+
+def graded_trace(trace: list[dict]) -> list[dict]:
+    """Trace rows of the graded workspace, in time order, without rows whose scoring failed (their reward is a
+    fallback 0.0)."""
+    return sorted((p for p in trace if p.get("label") == GRADED_LABEL and "error" not in p), key=lambda p: p["t"])
 
 
 def _json(path: Path):
-    return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else None
+    try:
+        return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else None
+    except json.JSONDecodeError:
+        return None
+
+
+def _events(path: Path) -> tuple[list[dict], int]:
+    """The parseable events and the number of lines that were not (a cancelled agent can leave a cut line)."""
+    events, bad = [], 0
+    if path.is_file():
+        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            if line.strip():
+                try:
+                    events.append(json.loads(line))
+                except json.JSONDecodeError:
+                    bad += 1
+    return events, bad
 
 
 def _wall_s(result: dict | None) -> float:
@@ -44,7 +69,7 @@ def load_trial(trial: Path, instance: str, condition: str) -> TrialRecord:
     details = _json(trial / "verifier" / "details.json") or {}
     outcome = _json(trial / "agent" / "collab" / "outcome.json") or {}
     events_path = trial / "agent" / "collab" / "events.jsonl"
-    events = EventLog.read(events_path) if events_path.is_file() else []
+    events, bad_lines = _events(events_path)
     reward, requirements, extras = None, {}, {}
     if reward_json is not None:
         for key, value in reward_json.items():
@@ -63,7 +88,7 @@ def load_trial(trial: Path, instance: str, condition: str) -> TrialRecord:
         requirements=requirements, extras=extras, report=outcome.get("report"),
         status=outcome.get("status", "no_outcome"), events=events, trace=details.get("trace", []), tokens=tokens,
         wall_s=_wall_s(_json(trial / "result.json")),
-        infra_error=reward is None or bool(extras.get("verifier_error")) or unavailable)
+        infra_error=reward is None or bool(extras.get("verifier_error")) or unavailable, bad_event_lines=bad_lines)
 
 
 def load_trials(runs_dir: Path) -> list[TrialRecord]:
@@ -71,6 +96,6 @@ def load_trials(runs_dir: Path) -> list[TrialRecord]:
     records = []
     for job in sorted(p for p in Path(runs_dir).rglob("*") if p.is_dir() and p.name.count("--") == 2):
         instance, condition, _ = job.name.split("--")
-        for result in sorted(job.glob("*/result.json")):
-            records.append(load_trial(result.parent, instance, condition))
+        for trial in sorted(p for p in job.iterdir() if p.is_dir()):
+            records.append(load_trial(trial, instance, condition))
     return records

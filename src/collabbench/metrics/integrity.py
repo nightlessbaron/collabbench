@@ -4,7 +4,7 @@ import re
 import shlex
 from statistics import fmean
 
-from collabbench.metrics.trial import TrialRecord
+from collabbench.metrics.trial import TrialRecord, graded_trace
 from collabbench.tracks.common import fact_disclosed
 
 
@@ -32,7 +32,7 @@ def liveness(record: TrialRecord) -> dict:
     that already had the final reward."""
     overrun = None
     if record.tokens and record.reward is not None:
-        first = next((p for p in sorted(record.trace, key=lambda p: p["t"]) if p["reward"] == record.reward), None)
+        first = next((p for p in graded_trace(record.trace) if p["reward"] == record.reward), None)
         if first is not None:
             overrun = max(record.tokens - first["tokens_so_far"], 0) / record.tokens
     return {"deadlock": any(e["type"] == "deadlock" for e in record.events),

@@ -3,6 +3,8 @@
 import math
 from statistics import fmean
 
+from collabbench.metrics.trial import graded_trace
+
 
 def expected_best_of_k(scores: list[float], k: int) -> float:
     """Expected maximum of k scores drawn without replacement from `scores` (unbiased)."""
@@ -42,8 +44,29 @@ def comm_value_captured(team: list[float], nocomm: list[float], oracle: list[flo
 
 
 def time_to_score(trace: list[dict], q: float) -> float | None:
-    """Time of the first snapshot whose reward reaches q, or None."""
-    for point in sorted(trace, key=lambda p: p["t"]):
+    """Time of the first graded-workspace snapshot whose reward reaches q, or None."""
+    for point in graded_trace(trace):
         if point["reward"] >= q:
             return point["t"]
     return None
+
+
+def interaction_gain_by_instance(per_instance: list[tuple[list[float], list[float]]], k: int) -> float:
+    """Mean over instances of interaction_gain(team_i, solo_B_i, k); instances with fewer than k solo runs or no team
+    runs are left out. Raises ValueError when none remain."""
+    gains = [interaction_gain(t, s, k) for t, s in per_instance if t and len(s) >= k]
+    if not gains:
+        raise ValueError("no instance has team runs and k solo runs")
+    return fmean(gains)
+
+
+def multiplier_by_instance(per_instance: list[tuple[list[float], list[float]]], k: int) -> float:
+    """multiplier with best-of-k' taken within each instance and then averaged over instances."""
+    usable = [(t, s) for t, s in per_instance if t and len(s) >= k]
+    if not usable:
+        raise ValueError("no instance has team runs and k solo runs")
+    target = fmean(fmean(t) for t, _ in usable)
+    for k_prime in range(1, min(len(s) for _, s in usable) + 1):
+        if fmean(expected_best_of_k(s, k_prime) for _, s in usable) >= target:
+            return k_prime / k
+    return math.inf

@@ -18,23 +18,25 @@ PAIRS = {"pool": [("team", "solo_2B", 2)], "inspire": [("team", "solo_2B", 2)],
 
 
 def bootstrap_ci(values_by_instance: dict[str, list], stat: Callable[[list], float], n: int = 2000,
-                 seed: int = 0) -> tuple[float, float, float]:
+                 seed: int = 0, grouped: bool = False) -> tuple[float, float, float]:
     """(point estimate, 2.5th, 97.5th percentile). Each replicate resamples instances with replacement, then the
-    runs within each drawn instance. `stat` gets the flat list of resampled items; resamples where it raises
+    runs within each drawn instance. `stat` gets the flat list of resampled items (with `grouped`, one list per drawn
+    instance, so a statistic can be computed per instance); resamples where it raises
     ValueError or ZeroDivisionError or returns NaN are dropped."""
     nan = math.nan
     groups = [v for v in values_by_instance.values() if v]
     if not groups:
         return nan, nan, nan
     try:
-        point = stat([x for g in groups for x in g])
+        point = stat([list(g) for g in groups] if grouped else [x for g in groups for x in g])
     except (ValueError, ZeroDivisionError):
         point = nan
     rng = random.Random(seed)
     draws = []
     for _ in range(n):
         try:
-            value = stat([rng.choice(g) for g in rng.choices(groups, k=len(groups)) for _ in g])
+            drawn = [[rng.choice(g) for _ in g] for g in rng.choices(groups, k=len(groups))]
+            value = stat(drawn if grouped else [x for g in drawn for x in g])
         except (ValueError, ZeroDivisionError):
             continue
         if not math.isnan(value):
@@ -56,8 +58,13 @@ def _split(items: list[tuple[str, float]], *conditions: str) -> list[list[float]
     return arms
 
 
-def _row(values_by_instance: dict[str, list], stat, n: int) -> dict:
-    point, lo, hi = bootstrap_ci(values_by_instance, stat, n)
+def _arms(groups: list[list[tuple[str, float]]], *conditions: str) -> list[tuple[list[float], ...]]:
+    """Per instance, the scores of each condition."""
+    return [tuple([v for c, v in g if c == cond] for cond in conditions) for g in groups]
+
+
+def _row(values_by_instance: dict[str, list], stat, n: int, grouped: bool = False) -> dict:
+    point, lo, hi = bootstrap_ci(values_by_instance, stat, n, grouped=grouped)
     return {"value": point, "lo": lo, "hi": hi, "n": sum(len(v) for v in values_by_instance.values())}
 
 
@@ -101,9 +108,11 @@ def _track_profile(track: str, records: list[TrialRecord], infra: int, tasks_dir
         metrics[f"collaboration_gain[{team}/{solo}]"] = _row(
             paired(team, solo), lambda x: outcome.collaboration_gain(*_split(x, team, solo)), n)
         metrics[f"interaction_gain[{team}]"] = _row(
-            paired(team, "solo_B"), lambda x: outcome.interaction_gain(*_split(x, team, "solo_B"), k), n)
+            paired(team, "solo_B"),
+            lambda gs: outcome.interaction_gain_by_instance(_arms(gs, team, "solo_B"), k), n, grouped=True)
         metrics[f"multiplier[{team}]"] = _row(
-            paired(team, "solo_B"), lambda x: outcome.multiplier(*_split(x, team, "solo_B"), k), n)
+            paired(team, "solo_B"),
+            lambda gs: outcome.multiplier_by_instance(_arms(gs, team, "solo_B"), k), n, grouped=True)
     if track != "swarm":
         def cvc(x):
             value = outcome.comm_value_captured(*_split(x, "team", "nocomm", "oracle"))
@@ -120,16 +129,18 @@ def _track_profile(track: str, records: list[TrialRecord], infra: int, tasks_dir
                       lambda r: (integrity.disclosure_precision(r, f) if (f := _facts(tasks_dir, r)) else None)),
                      ("redundancy", process.redundancy), ("effective_contributors", process.effective_contributors),
                      ("uptake", process.uptake), ("critical_path_ratio", process.critical_path_ratio)]:
-        rows = _per_record(records, fn)
-        if rows:
-            metrics[name] = _row(rows, _mean, n)
+        for cond, rs in sorted(by_cond.items()):  # per condition: solo and team arms must not be averaged together
+            rows = _per_record(rs, fn)
+            if rows:
+                metrics[f"{name}[{cond}]"] = _row(rows, _mean, n)
     for name in ("false_success", "no_report", "claim_accuracy"):
         def stat(rs, name=name):
             value = integrity.report_fidelity(rs)[name]
             if value is None:
                 raise ValueError("no data")
             return value
-        metrics[name] = _row(_by_instance(records), stat, n)
+        for cond, rs in sorted(by_cond.items()):
+            metrics[f"{name}[{cond}]"] = _row(_by_instance(rs), stat, n)
     metrics["infra_error_trials"] = {"value": float(infra), "lo": math.nan, "hi": math.nan,
                                      "n": infra + len(records)}
     return metrics

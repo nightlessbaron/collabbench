@@ -28,3 +28,20 @@ def test_infra_error_flags(make_trial, tmp_path):
 def test_missing_outcome_still_loads(make_trial):
     (rec,) = load_trials(make_trial(outcome=False))
     assert rec.status == "no_outcome" and rec.report is None
+
+
+def test_truncated_events_line_is_skipped_and_counted(make_trial):
+    runs = make_trial(events=[ev("agent-0", "llm_call", 1, 5, 2)])
+    log = next(runs.rglob("events.jsonl"))
+    log.write_text(log.read_text() + '{"t": 3, "agent": "agent-1", "ty')
+    (rec,) = load_trials(runs)
+    assert len(rec.events) == 1 and rec.bad_event_lines == 1 and rec.reward == 1.0
+
+
+def test_trial_dir_without_result_json_is_infra_error(make_trial):
+    runs = make_trial(trial="good")
+    job = next(runs.glob("pool-0001--*"))
+    (job / "dead" / "agent").mkdir(parents=True)
+    by_id = {r.trial_id: r for r in load_trials(runs)}
+    assert by_id["dead"].infra_error and by_id["dead"].reward is None
+    assert not by_id["good"].infra_error

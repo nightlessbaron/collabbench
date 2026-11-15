@@ -67,3 +67,28 @@ def test_profile_json_is_strict(make_trial, tmp_path):
     assert data["pool"]["multiplier[team]"]["value"] == "inf"
     assert data["pool"]["infra_error_trials"]["lo"] is None
     assert "∞" in (tmp_path / "out" / "profile.md").read_text()
+
+
+def test_best_of_k_is_per_instance(make_trial, tmp_path):
+    runs = tmp_path / "r"
+    for inst, team, solo in (("pool-0001", 1.0, 1.0), ("pool-0002", 0.2, 0.0)):
+        make_trial(instance=inst, condition="team", trial="t", reward=team, runs=runs)
+        for i in range(2):
+            make_trial(instance=inst, condition="solo_B", trial=f"s{i}", reward=solo, runs=runs)
+    prof = build_profile(load_trials(runs), tmp_path / "tasks", n=20)["pool"]
+    # per instance: (1.0 - 1.0) and (0.2 - 0.0) average to 0.1; pooled solo scores [0,0,1,1] would give -0.233
+    assert prof["interaction_gain[team]"]["value"] == pytest.approx(0.1)
+    # team mean 0.6 is above every per-instance best-of-k' mean (0.5), though pooled best-of-2 is 5/6
+    assert prof["multiplier[team]"]["value"] == math.inf
+
+
+def test_process_metrics_are_keyed_by_condition(make_trial, tmp_path):
+    from tests.metrics.conftest import ev
+    runs = tmp_path / "r"
+    both = [ev("agent-0", "llm_call"), ev("agent-1", "llm_call")]
+    make_trial(condition="team", trial="t", events=both, runs=runs)
+    make_trial(condition="solo_2B", trial="s", events=[ev("agent-0", "llm_call")], runs=runs)
+    prof = build_profile(load_trials(runs), tmp_path / "tasks", n=20)["pool"]
+    assert prof["critical_path_ratio[team]"]["value"] == 0.5
+    assert prof["critical_path_ratio[solo_2B]"]["value"] == 1.0
+    assert "critical_path_ratio" not in prof and "false_success[team]" in prof

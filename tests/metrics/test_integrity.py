@@ -14,8 +14,9 @@ def rec(**kw):
 
 
 def test_overrun_counts_tokens_after_first_pass():
-    trace = [{"t": 1, "reward": 0.0, "tokens_so_far": 100}, {"t": 2, "reward": 1.0, "tokens_so_far": 300},
-             {"t": 3, "reward": 1.0, "tokens_so_far": 900}]
+    trace = [{"t": 1, "reward": 0.0, "tokens_so_far": 100, "label": "workspace"},
+             {"t": 2, "reward": 1.0, "tokens_so_far": 300, "label": "workspace"},
+             {"t": 3, "reward": 1.0, "tokens_so_far": 900, "label": "workspace"}]
     assert liveness(rec(reward=1.0, trace=trace, tokens=1000))["overrun"] == pytest.approx(0.7)
     assert liveness(rec(reward=1.0, trace=[], tokens=1000))["overrun"] is None
 
@@ -73,3 +74,11 @@ def test_fact_retention_uses_f_requirements():
     r = rec(requirements={"R1": False, "F1": True, "F2": False})
     assert fact_retention(r) == 0.5
     assert fact_retention(rec(requirements={"R1": True})) is None
+
+
+def test_overrun_ignores_agent_rows_and_error_rows():
+    trace = [{"t": 1, "reward": 1.0, "tokens_so_far": 50, "label": "agent-1"},
+             {"t": 2, "reward": 0.0, "tokens_so_far": 100, "label": "workspace", "error": "timeout"},
+             {"t": 3, "reward": 0.0, "tokens_so_far": 400, "label": "workspace"}]
+    assert liveness(rec(reward=0.0, trace=trace, tokens=1000))["overrun"] == pytest.approx(0.6)
+    assert liveness(rec(reward=1.0, trace=trace[:1], tokens=1000))["overrun"] is None
