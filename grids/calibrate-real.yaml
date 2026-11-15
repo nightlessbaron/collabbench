@@ -1,0 +1,19 @@
+# Admission calibration for the six realistic v1 tasks (design 9), 5 runs per admission cell.
+# Admission: Pool solo_2B >= 0.8 and nocomm <= 0.5; Swarm solo_B <= 0.7; Inspire oracle (solo with notes) >= 0.7
+# and solo_2B (solo without notes, matched budget) <= 0.6.
+# Budget: about 3M tokens per agent for the frontier-scale tasks (ruling, 2026-11-15).
+# Pool joins once its review fixes are merged and gated.
+pool: personal
+model: deepseek-v4-1-flash-1017
+effort: high
+concurrency: 6
+root: ..
+tracks:
+  swarm:
+    budget: 3000000
+    instances: [tasks/swarm/ormar-pydantic2, tasks/swarm/emmet-pydantic2]
+    conditions: {solo_B: 5}
+  inspire:
+    budget: 3000000
+    instances: [tasks/inspire/inspire-cif-canon, tasks/inspire/inspire-score-recovery]
+    conditions: {oracle: 5, solo_2B: 5}
