@@ -49,8 +49,8 @@ same 3M-token budget per agent. Results are added here as they finish; each row 
 | Claude Opus 5.5 | fiscal-s4 | team of three | *running* | | | | |
 | Claude Opus 5.5 | poe-s1 | one agent | *running* | | | | |
 | Claude Opus 5.5 | poe-s1 | team of three | *running* | | | | |
-| GPT-6.1 sol (high) | aldol-s4 | one agent | *running* | | | | |
-| GPT-6.1 sol (high) | aldol-s4 | team of three | *running* | | | | |
+| GPT-6.1 sol (high) | aldol-s4 | one agent | **0.993** | 0.28M | 6 | 1 | R1, x2 |
+| GPT-6.1 sol (high) | aldol-s4 | team of three | **1.000** | 1.20M | 6 | 3 | none |
 | GPT-6.1 sol (high) | cohort-s4 | one agent | *running* | | | | |
 | GPT-6.1 sol (high) | cohort-s4 | team of three | *running* | | | | |
 | GPT-6.1 sol (high) | fiscal-s4 | one agent | *running* | | | | |
@@ -65,7 +65,7 @@ the same check DeepSeek missed in every stage 3–4 run.
 The calibration runs below use **DeepSeek V4.1 Flash** in our own harness, with 3 runs per cell. Cells with fewer
 than 3 finished runs are marked *running*.
 
-![Mean reward by stage](results/depth_curve.svg)
+![Reward on the full stage-4 graphs by model and setup](results/s4_rewards.svg)
 
 | Graph | Condition | S1 | S2 | S3 | S4 |
 |---|---|---|---|---|---|
