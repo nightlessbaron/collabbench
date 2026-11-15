@@ -1,0 +1,10 @@
+{
+  "panel": {"trim": [0.0, 0.0, 210.0, 148.0], "bleed": 3.0, "fill": "bone"},
+  "disc": {"center": [46.0, 74.0], "radius": 22.0, "fill": "forest"},
+  "ring": {"center": [46.0, 74.0], "radius": 22.0, "stroke_width": 2.4, "fill": "bone"},
+  "arrow": {"vertices": [[78.0, 62.0], [104.0, 74.0], [78.0, 86.0], [84.0, 74.0]], "fill": "rust"},
+  "texts": [
+    {"text": "RIVERSIDE", "x": 118.0, "y": 66.0, "size_pt": 30.0, "tracking": 0.06, "fill": "ink"},
+    {"text": "LIBRARY", "x": 118.0, "y": 98.0, "size_pt": 22.0, "tracking": 0.10, "fill": "slate"}
+  ]
+}

@@ -1,0 +1,134 @@
+#!/usr/bin/env python3
+"""farmctl -- Halcyon Press job-ticket front end.
+
+    farmctl validate JOB.yaml
+
+Exit status 0 means the ticket is structurally acceptable to the press.  It
+does not check the measured values against the shop's own reading.
+"""
+
+import math
+import os
+import sys
+
+import yaml
+
+
+def is_num(v):
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(float(v))
+
+
+def validate(job, base_dir):
+    errs = []
+    if not isinstance(job, dict):
+        return ["ticket is not a mapping"]
+
+    trim = job.get("trim_mm")
+    media = job.get("media_mm")
+    bleed = job.get("bleed_mm")
+    if not (isinstance(trim, list) and len(trim) == 2 and all(is_num(v) for v in trim)):
+        errs.append("trim_mm must be two numbers")
+    if not is_num(bleed):
+        errs.append("bleed_mm must be a number")
+    if not (isinstance(media, list) and len(media) == 2 and all(is_num(v) for v in media)):
+        errs.append("media_mm must be two numbers")
+    if (
+        isinstance(trim, list)
+        and len(trim) == 2
+        and is_num(bleed)
+        and isinstance(media, list)
+        and len(media) == 2
+    ):
+        if abs((float(trim[0]) + 2 * float(bleed)) - float(media[0])) > 0.05:
+            errs.append("media width is not trim + 2*bleed")
+        if abs((float(trim[1]) + 2 * float(bleed)) - float(media[1])) > 0.05:
+            errs.append("media height is not trim + 2*bleed")
+        if any(float(v) <= 0 for v in trim) or any(float(v) <= 0 for v in media):
+            errs.append("dimensions must be positive")
+
+    res = job.get("resolution_dpi")
+    if not isinstance(res, int) or isinstance(res, bool) or not (150 <= res <= 600):
+        errs.append("resolution_dpi must be an integer in 150..600")
+
+    allowed = {"coated-matte", "uncoated", "synthetic", "adhesive-vinyl"}
+    if job.get("substrate") not in allowed:
+        errs.append("substrate is not one of %s" % sorted(allowed))
+
+    icc = job.get("icc_profile")
+    if not isinstance(icc, str) or not icc or icc.startswith("/") or ".." in icc.split("/"):
+        errs.append("icc_profile must be a normalized relative path")
+    else:
+        candidates = [os.path.join(base_dir, icc), os.path.join(os.getcwd(), icc)]
+        if not any(os.path.isfile(p) for p in candidates):
+            errs.append("icc_profile does not resolve: %s" % icc)
+
+    ink_limit = job.get("ink_limit")
+    if not is_num(ink_limit) or not (0 <= float(ink_limit) <= 400):
+        errs.append("ink_limit must be a number in 0..400")
+
+    curve = job.get("press_curve")
+    if not (isinstance(curve, list) and len(curve) == 9):
+        errs.append("press_curve must have nine points")
+    else:
+        prev_in, prev_out = -1.0, -1.0
+        ok = True
+        for pt in curve:
+            if not (isinstance(pt, list) and len(pt) == 2 and all(is_num(v) for v in pt)):
+                errs.append("press_curve points must be [input, output]")
+                ok = False
+                break
+            a, b = float(pt[0]), float(pt[1])
+            if not (0 <= a <= 100 and 0 <= b <= 100):
+                errs.append("press_curve values must be in 0..100")
+                ok = False
+                break
+            if a <= prev_in or b < prev_out:
+                errs.append("press_curve must be strictly increasing in input and monotone in output")
+                ok = False
+                break
+            prev_in, prev_out = a, b
+        if ok and (abs(float(curve[0][0])) > 1e-9 or abs(float(curve[-1][0]) - 100.0) > 1e-9):
+            errs.append("press_curve must span input 0..100")
+
+    box = job.get("content_box_mm")
+    if not (isinstance(box, list) and len(box) == 4 and all(is_num(v) for v in box)):
+        errs.append("content_box_mm must be four numbers")
+    elif isinstance(media, list) and len(media) == 2:
+        if not (0 <= float(box[0]) < float(box[2]) <= float(media[0]) + 1e-9):
+            errs.append("content_box_mm x range is outside the media")
+        if not (0 <= float(box[1]) < float(box[3]) <= float(media[1]) + 1e-9):
+            errs.append("content_box_mm y range is outside the media")
+
+    measured = job.get("measured")
+    if not isinstance(measured, dict):
+        errs.append("measured block is missing")
+    else:
+        for key in ("ink_coverage", "min_contrast", "pri"):
+            if not is_num(measured.get(key, None)):
+                errs.append("measured.%s must be a number" % key)
+
+    return errs
+
+
+def main(argv):
+    if len(argv) != 2 or argv[0] != "validate":
+        sys.stderr.write("usage: farmctl validate JOB.yaml\n")
+        return 2
+    path = argv[1]
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            job = yaml.safe_load(fh)
+    except Exception as exc:
+        sys.stderr.write("cannot read ticket: %s\n" % exc)
+        return 2
+    errs = validate(job, os.path.dirname(os.path.abspath(path)))
+    if errs:
+        for e in errs:
+            sys.stderr.write("farmctl: %s\n" % e)
+        return 1
+    print("OK %s" % job.get("job_id", ""))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

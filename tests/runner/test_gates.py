@@ -36,3 +36,23 @@ def test_gate_thresholds(tmp_path):
     broken = evaluate_gate("pool-0001", "pool", trial(tmp_path, "o5", None, exception="BuildError"),
                            trial(tmp_path, "n5", {"reward": 0.0}), trial(tmp_path, "p5", None, probe))
     assert not broken.passed and not broken.image_ok
+
+
+def test_gate_fails_an_oracle_graded_unisolated(tmp_path):
+    """A task that names an agent UID records `isolated` in reward.json. An oracle trial graded without isolation
+    (isolated = 0: the verifier was not root, so agent code ran as the grader's own user) proves nothing about the
+    grade's integrity, so the gate fails even when the reward is perfect. Tasks that run no agent code record no
+    `isolated` key and are unaffected."""
+    probe = {"probe": {"private_exists": False, "parallel_exec_s": 2.4}}
+    nop = trial(tmp_path, "n", {"reward": 0.0, "unauthorized": 0})
+    unisolated = evaluate_gate("pool-aquilon", "pool", trial(tmp_path, "o", {"reward": 1.0, "unauthorized": 0,
+                                                                             "isolated": 0}),
+                               nop, trial(tmp_path, "p", None, probe))
+    assert not unisolated.passed and any("isolat" in n for n in unisolated.notes)
+    isolated = evaluate_gate("pool-aquilon", "pool", trial(tmp_path, "o2", {"reward": 1.0, "unauthorized": 0,
+                                                                            "isolated": 1}),
+                             nop, trial(tmp_path, "p2", None, probe))
+    assert isolated.passed and not isolated.notes
+    no_uid = evaluate_gate("pool-0001", "pool", trial(tmp_path, "o3", {"reward": 1.0, "unauthorized": 0}),
+                           nop, trial(tmp_path, "p3", None, probe))
+    assert no_uid.passed

@@ -1,0 +1,18 @@
+{
+ "track": "pool",
+ "roles": [
+  "a",
+  "b"
+ ],
+ "workspace": "shared",
+ "owners": {
+  "a": [
+   "pressproof.py"
+  ],
+  "b": [
+   "job.yaml"
+  ]
+ },
+ "reserved_command": "scripts/submit_ticket.sh",
+ "source_task": "halcyon-pressproof-goal-0026-v2"
+}

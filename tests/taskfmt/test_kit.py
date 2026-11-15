@@ -407,3 +407,19 @@ def test_grade_uses_the_one_shared_isolation_module(tmp_path):
     grade = (d / "tests" / "grade.py").read_text()
     assert re.search(r"^import isolation", grade, re.M)
     assert not any(marker in grade for marker in ("/proc", "prctl", "chown", "SIGKILL"))
+
+
+def test_pin_by_collection_when_the_reference_cannot_run_locally(tmp_path):
+    """pin="collect": the hidden test names are pinned by collecting the suite, not by running the reference, for a
+    task whose reference needs what this machine lacks (here a solve.sh that fails, and hidden tests that import a
+    module only the verifier image has, inside a fixture). The names equal those a reference run would report."""
+    lazy = HIDDEN.replace("from calc import add\n", "import pytest\n\n\n@pytest.fixture\ndef add():\n"
+                                                  "    import only_in_the_image  # noqa: F401\n")
+    lazy = lazy.replace("def test_R1_add():", "def test_R1_add(add):").replace(
+        "def test_R2_add_negative():", "@pytest.mark.parametrize('n', [1, 2])\ndef test_R2_add_negative(add, n):")
+    spec = toy_spec(hidden_files={"hidden/test_calc.py": lazy}, solution_sh="exit 1\n", pin="collect")
+    d = write_task(spec, tmp_path)
+    pinned = json.loads((d / "tests" / "hidden" / "expected_tests.json").read_text())
+    assert pinned == ["test_R1_add", "test_R2_add_negative[1]", "test_R2_add_negative[2]"]
+    with pytest.raises(ValueError):
+        write_task(toy_spec(pin="sometimes"), tmp_path / "bad")

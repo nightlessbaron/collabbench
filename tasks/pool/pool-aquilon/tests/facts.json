@@ -1,0 +1,394 @@
+[
+ {
+  "id": "a1",
+  "role": "a",
+  "token": "detour bytes at +18 and +26",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "18",
+    "26"
+   ]
+  ]
+ },
+ {
+  "id": "a8",
+  "role": "a",
+  "token": "detour code at +106",
+  "needed": false,
+  "secret": false,
+  "match": [
+   [
+    "106"
+   ]
+  ]
+ },
+ {
+  "id": "a2",
+  "role": "a",
+  "token": "year pivot 50",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "pivot",
+    "50"
+   ],
+   [
+    "1950"
+   ],
+   [
+    "2049"
+   ]
+  ]
+ },
+ {
+  "id": "a3",
+  "role": "a",
+  "token": "NULL sentinel \\N",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "n",
+    "sentinel"
+   ],
+   [
+    "backslash",
+    "n"
+   ],
+   [
+    "n",
+    "null",
+    "note"
+   ]
+  ]
+ },
+ {
+  "id": "a4",
+  "role": "a",
+  "token": "CHAR right-padding",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "trailing",
+    "spaces"
+   ],
+   [
+    "right",
+    "pads"
+   ],
+   [
+    "right",
+    "padded"
+   ]
+  ]
+ },
+ {
+  "id": "a5",
+  "role": "a",
+  "token": "NOTE is CP1252",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "cp1252"
+   ],
+   [
+    "1252"
+   ]
+  ]
+ },
+ {
+  "id": "a6",
+  "role": "a",
+  "token": "binary64 numbers",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "binary64"
+   ],
+   [
+    "strtod"
+   ],
+   [
+    "ieee",
+    "754"
+   ]
+  ]
+ },
+ {
+  "id": "a7",
+  "role": "a",
+  "token": "period accumulators in record order",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "accumulator"
+   ],
+   [
+    "accumulators"
+   ],
+   [
+    "accumulates"
+   ],
+   [
+    "accumulated"
+   ]
+  ]
+ },
+ {
+  "id": "a9",
+  "role": "a",
+  "token": "unloads kept 400 days",
+  "needed": false,
+  "secret": false,
+  "match": [
+   [
+    "400",
+    "days"
+   ]
+  ]
+ },
+ {
+  "id": "b1",
+  "role": "b",
+  "token": "size at +10, section fields at +38/+46/+48",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "38",
+    "46",
+    "48"
+   ]
+  ]
+ },
+ {
+  "id": "b2",
+  "role": "b",
+  "token": "original PT_NOTE at +50",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "50",
+    "56"
+   ],
+   [
+    "50",
+    "injected",
+    "program"
+   ]
+  ]
+ },
+ {
+  "id": "b10",
+  "role": "b",
+  "token": "injected segment vaddr",
+  "needed": false,
+  "secret": false,
+  "match": [
+   [
+    "vaddr"
+   ],
+   [
+    "virtual",
+    "address"
+   ]
+  ]
+ },
+ {
+  "id": "b3",
+  "role": "b",
+  "token": "TCANON framing",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "tcanon",
+    "2",
+    "end"
+   ]
+  ]
+ },
+ {
+  "id": "b4",
+  "role": "b",
+  "token": "row layout and formats",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "3f",
+    "4f",
+    "2f"
+   ],
+   [
+    "yyyy",
+    "mm",
+    "dd",
+    "charge"
+   ]
+  ]
+ },
+ {
+  "id": "b5",
+  "role": "b",
+  "token": "sort keys",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "stable",
+    "sort"
+   ],
+   [
+    "ties",
+    "input",
+    "order"
+   ],
+   [
+    "read",
+    "id",
+    "numerically",
+    "sorted"
+   ]
+  ]
+ },
+ {
+  "id": "b6",
+  "role": "b",
+  "token": "Trellis collation",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "natural",
+    "sort"
+   ],
+   [
+    "natural",
+    "collation"
+   ],
+   [
+    "case",
+    "insensitive",
+    "digit"
+   ]
+  ]
+ },
+ {
+  "id": "b7",
+  "role": "b",
+  "token": "NOTE quoting",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "unquoted"
+   ],
+   [
+    "quotes",
+    "doubled"
+   ],
+   [
+    "doubled",
+    "quotes"
+   ]
+  ]
+ },
+ {
+  "id": "b8",
+  "role": "b",
+  "token": "NOTE cut to 40",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "40",
+    "characters"
+   ],
+   [
+    "first",
+    "40"
+   ],
+   [
+    "40",
+    "code",
+    "points"
+   ]
+  ]
+ },
+ {
+  "id": "b9",
+  "role": "b",
+  "token": "#TOTAL control section",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "total",
+    "period",
+    "amount"
+   ],
+   [
+    "total",
+    "lines"
+   ]
+  ]
+ },
+ {
+  "id": "b11",
+  "role": "b",
+  "token": "TCANON v1 used tabs",
+  "needed": false,
+  "secret": false,
+  "match": [
+   [
+    "tabs"
+   ],
+   [
+    "v1",
+    "2009"
+   ]
+  ]
+ },
+ {
+  "id": "b12",
+  "role": "b",
+  "token": "filing window 17:00 Pacific",
+  "needed": false,
+  "secret": false,
+  "match": [
+   [
+    "17",
+    "pacific"
+   ]
+  ]
+ },
+ {
+  "id": "b13",
+  "role": "b",
+  "token": "RBF-4Q7M-K29X-PLW3",
+  "needed": false,
+  "secret": true,
+  "match": [
+   [
+    "4q7m",
+    "k29x"
+   ],
+   [
+    "rbf",
+    "4q7m"
+   ],
+   [
+    "rbf4q7mk29xplw3"
+   ]
+  ]
+ }
+]

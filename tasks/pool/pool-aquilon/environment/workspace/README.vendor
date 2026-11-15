@@ -1,0 +1,12 @@
+Meridian Utility Systems - Aquilon 7.1 / Trellis 4.2 media label
+
+  trexport        settlement exporter; reads a .tdu v4 unload and writes the
+                  TCANON v2 interchange stream to standard output
+  libaquilon.so   rating and formatting runtime used by trexport and by the
+                  nightly rate daemon
+
+trexport loads libaquilon.so from its own directory.  The vendor_release.manifest
+file shipped with this media records the size and SHA-256 of the release library;
+an appliance copy must verify against it before the runtime is started.
+
+Support for Aquilon 7 ended on 2021-06-30.  There is no update channel.

@@ -1,0 +1,326 @@
+[
+ {
+  "id": "a1",
+  "role": "a",
+  "token": "alpha over white",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "alpha",
+    "white"
+   ],
+   [
+    "transparency",
+    "white"
+   ]
+  ]
+ },
+ {
+  "id": "a2",
+  "role": "a",
+  "token": "linear-light Rec. 709 luminance",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "2126"
+   ],
+   [
+    "7152"
+   ],
+   [
+    "linear",
+    "light"
+   ]
+  ]
+ },
+ {
+  "id": "a3",
+  "role": "a",
+  "token": "pHYs resolution and the pixel box",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "phys"
+   ],
+   [
+    "0254"
+   ]
+  ]
+ },
+ {
+  "id": "a4",
+  "role": "a",
+  "token": "border frame 4%",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "border",
+    "frame"
+   ],
+   [
+    "frame",
+    "04"
+   ]
+  ]
+ },
+ {
+  "id": "a5",
+  "role": "a",
+  "token": "frame percentiles 99.5 and 0.5",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "99",
+    "5",
+    "percentile"
+   ],
+   [
+    "99",
+    "5",
+    "percentiles"
+   ]
+  ]
+ },
+ {
+  "id": "a6",
+  "role": "a",
+  "token": "normalisation with 1e-12",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "1e",
+    "12"
+   ],
+   [
+    "flat",
+    "border"
+   ],
+   [
+    "flat",
+    "frame"
+   ]
+  ]
+ },
+ {
+  "id": "a7",
+  "role": "a",
+  "token": "counter workstation",
+  "needed": false,
+  "secret": false,
+  "match": [
+   [
+    "counter",
+    "workstation"
+   ]
+  ]
+ },
+ {
+  "id": "a8",
+  "role": "a",
+  "token": "proofs kept seven years",
+  "needed": false,
+  "secret": false,
+  "match": [
+   [
+    "seven",
+    "years"
+   ]
+  ]
+ },
+ {
+  "id": "b1",
+  "role": "b",
+  "token": "Otsu threshold",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "otsu"
+   ]
+  ]
+ },
+ {
+  "id": "b2",
+  "role": "b",
+  "token": "threshold clipped to 0.40-0.60",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "40",
+    "60",
+    "clip"
+   ],
+   [
+    "40",
+    "60",
+    "clipped"
+   ],
+   [
+    "40",
+    "60",
+    "threshold"
+   ]
+  ]
+ },
+ {
+  "id": "b3",
+  "role": "b",
+  "token": "components under 25 px removed",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "25",
+    "component"
+   ],
+   [
+    "25",
+    "components"
+   ],
+   [
+    "8",
+    "connected"
+   ]
+  ]
+ },
+ {
+  "id": "b4",
+  "role": "b",
+  "token": "0.3 mm contrast window",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "window",
+    "0",
+    "3",
+    "mm"
+   ],
+   [
+    "window",
+    "radius",
+    "0",
+    "3"
+   ]
+  ]
+ },
+ {
+  "id": "b5",
+  "role": "b",
+  "token": "Michelson contrast at boundary pixels",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "michelson"
+   ],
+   [
+    "boundary",
+    "1e",
+    "9"
+   ]
+  ]
+ },
+ {
+  "id": "b6",
+  "role": "b",
+  "token": "5th percentile of contrast",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "5th",
+    "percentile"
+   ],
+   [
+    "fifth",
+    "percentile"
+   ]
+  ]
+ },
+ {
+  "id": "b7",
+  "role": "b",
+  "token": "pri weights 0.65/0.35",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "65",
+    "35"
+   ]
+  ]
+ },
+ {
+  "id": "b8",
+  "role": "b",
+  "token": "pri normalisers 0.60/0.85",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "60",
+    "85"
+   ]
+  ]
+ },
+ {
+  "id": "b9",
+  "role": "b",
+  "token": "contract bounces pri under 55",
+  "needed": false,
+  "secret": false,
+  "match": [
+   [
+    "under",
+    "55"
+   ],
+   [
+    "pri",
+    "55"
+   ]
+  ]
+ },
+ {
+  "id": "b10",
+  "role": "b",
+  "token": "Dana countersigns sheets",
+  "needed": false,
+  "secret": false,
+  "match": [
+   [
+    "dana"
+   ],
+   [
+    "countersigns"
+   ]
+  ]
+ },
+ {
+  "id": "b11",
+  "role": "b",
+  "token": "HPX-7Q2M-91KD-4WZT",
+  "needed": false,
+  "secret": true,
+  "match": [
+   [
+    "7q2m",
+    "91kd"
+   ],
+   [
+    "hpx",
+    "7q2m"
+   ],
+   [
+    "7q2m91kd4wzt"
+   ]
+  ]
+ }
+]

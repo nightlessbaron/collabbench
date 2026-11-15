@@ -1,5 +1,6 @@
-"""Static gates on Modal (design 9): the reference scores 1, the untouched start scores 0, the image builds, the
-tripwire stays quiet under the reference, private context is gone before agents start, and concurrent exec works."""
+"""Static gates on Modal (design 9): the reference scores 1 (and is graded isolated, where the task runs agent code),
+the untouched start scores 0, the image builds, the tripwire stays quiet under the reference, private context is gone
+before agents start, and concurrent exec works."""
 
 import json
 import subprocess
@@ -57,6 +58,8 @@ def evaluate_gate(task: str, track: str, oracle: dict, nop: dict, probe: dict) -
     unauthorized = oracle.get("rewards", {}).get("unauthorized")
     if unauthorized:
         notes.append("the reference run fired the tripwire")
+    if oracle.get("rewards", {}).get("isolated") == 0:  # recorded only by tasks that run agent code (agent_uid)
+        notes.append("the reference run was graded unisolated (isolated = 0): agent code ran as the grader's user")
     p = probe.get("metadata", {}).get("probe") or {}
     removed = p.get("private_exists") is False
     if not removed:

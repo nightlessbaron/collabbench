@@ -1,0 +1,27 @@
+# Example ticket for an earlier job, kept as a formatting reference.
+# Replace the values; do not reuse this content box for Riverside.
+schema: "halcyon-press-ticket/1"
+job_id: "HP-2026-0388"
+client: "Cascade Transit"
+trim_mm: [148.0, 105.0]
+media_mm: [154.0, 111.0]
+bleed_mm: 3.0
+resolution_dpi: 300
+substrate: "uncoated"
+icc_profile: "profiles/Halcyon_CoatedMatte_v4.icc"
+ink_limit: 280
+press_curve:
+  - [0, 0]
+  - [12, 11]
+  - [25, 23]
+  - [37, 36]
+  - [50, 50]
+  - [62, 63]
+  - [75, 75]
+  - [87, 88]
+  - [100, 100]
+content_box_mm: [8.0, 9.5, 146.0, 95.5]
+measured:
+  ink_coverage: 0.221480
+  min_contrast: 0.503112
+  pri: 44.520011

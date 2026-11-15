@@ -2,7 +2,10 @@
 
 import hashlib
 import json
+import os
 import shutil
+import subprocess
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -29,6 +32,11 @@ class TaskSpec:
     cpus: int = 1
     memory_mb: int = 2048
     extra_metadata: dict = field(default_factory=dict)
+    # How tests/hidden/expected_tests.json is pinned when the score uses pytest_score: "reference" runs the reference
+    # locally and pins the tests it reports; "collect" pins the collected test names without running anything, for a
+    # task whose reference or hidden tests need what only its images install (the hidden tests then import such
+    # modules inside fixtures, so collection works here).
+    pin: str = "reference"
 
 
 def _write(path: Path, text: str, mode: int | None = None) -> None:
@@ -49,6 +57,8 @@ def grading_deadline(spec: TaskSpec) -> int:
 
 
 def write_task(spec: TaskSpec, out: Path) -> Path:
+    if spec.pin not in ("reference", "collect"):
+        raise ValueError(f"{spec.name}: pin must be 'reference' or 'collect', not {spec.pin!r}")
     d = Path(out) / spec.name
     if d.exists():
         shutil.rmtree(d)
@@ -105,8 +115,24 @@ memory_mb = {spec.memory_mb}
     _write(tests / "tripwire_nonce.txt", nonce + "\n")
     for rel, text in spec.hidden_files.items():
         _write(tests / rel, text)
-    if "pytest_score" in spec.score_py:  # pin the hidden test names from the reference run
-        from collabbench.taskfmt.localcheck import score_locally
-        names = sorted(score_locally(d, "reference").get("tests", {}))
+    if "pytest_score" in spec.score_py:  # pin the hidden test names
+        if spec.pin == "collect":
+            names = collect_tests(tests / "hidden", env / "workspace")
+        else:
+            from collabbench.taskfmt.localcheck import score_locally
+            names = sorted(score_locally(d, "reference").get("tests", {}))
         _write(tests / "hidden" / "expected_tests.json", json.dumps(names, indent=1))
     return d
+
+
+def collect_tests(hidden: Path, workspace: Path) -> list[str]:
+    """The hidden suite's test names, as pytest_score reports them (function name plus parameter ids), collected the
+    way pytest_score runs the suite but without running a test."""
+    run = subprocess.run([sys.executable, "-I", "-B", "-m", "pytest", str(hidden), "--collect-only", "-q",
+                          "-p", "no:cacheprovider", "--rootdir", str(hidden), "-c", os.devnull],
+                         cwd=workspace, capture_output=True, text=True, timeout=300,
+                         env={**os.environ, "COLLAB_WORKSPACE": str(workspace), "PYTHONDONTWRITEBYTECODE": "1"})
+    names = sorted(line.split("::", 1)[1] for line in run.stdout.splitlines() if "::" in line)
+    if run.returncode != 0 or not names:
+        raise RuntimeError(f"collecting {hidden} failed:\n{run.stdout[-2000:]}{run.stderr[-2000:]}")
+    return names

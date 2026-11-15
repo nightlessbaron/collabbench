@@ -1,0 +1,18 @@
+{
+ "track": "pool",
+ "roles": [
+  "a",
+  "b"
+ ],
+ "workspace": "shared",
+ "owners": {
+  "a": [
+   "tools"
+  ],
+  "b": [
+   "migration"
+  ]
+ },
+ "reserved_command": "scripts/file_with_rate_board.sh",
+ "source_task": "aquilon-settlement-export-goal-0012-e1"
+}

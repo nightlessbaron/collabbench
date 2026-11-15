@@ -89,7 +89,7 @@ def build(out: Path, seeds_root: Path = real.SEEDS_ROOT) -> Path:
         manifest=real.manifest(RESERVED, SEED_ID),
         solution_sh=real.retarget((seed / "solution" / "solve.sh").read_text(), roots),
         hidden_files={"hidden/test_score_recovery.py": real.asset(SLUG, "hidden_tests.py"),
-                      "hidden/harness.py": (real.ASSETS / "harness.py").read_text(),
+                      "hidden/harness.py": real.HARNESS.read_text(),
                       "agent_uid": f"{real.AGENT_UID}\n",
                       f"hidden/{LIB}": (seed / "tests" / LIB).read_text(),
                       "hidden/visible_corpus.json": json.dumps(visible, indent=1, sort_keys=True) + "\n"},
