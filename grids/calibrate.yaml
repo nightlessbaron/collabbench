@@ -1,0 +1,21 @@
+# Task 13 calibration: one run of each admission condition (design 9) per instance, at the plan's starting budgets.
+# Admission: Pool solo_2B >= 0.8 and nocomm <= 0.5; Swarm solo_B <= 0.7; Inspire oracle (solo with notes) >= 0.7
+# and solo_2B (solo without notes, matched budget) <= 0.6.
+pool: personal
+model: deepseek-v4-1-flash-1017
+effort: high
+concurrency: 4
+root: ..
+tracks:
+  pool:
+    budget: 400000
+    instances: [tasks/pool/pool-*]
+    conditions: {solo_2B: 1, nocomm: 1}
+  swarm:
+    budget: 300000
+    instances: [tasks/swarm/swarm-*]
+    conditions: {solo_B: 1}
+  inspire:
+    budget: 400000
+    instances: [tasks/inspire/inspire-*]
+    conditions: {oracle: 1, solo_2B: 1}
