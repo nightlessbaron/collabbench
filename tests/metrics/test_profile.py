@@ -49,3 +49,21 @@ def test_profile_md_has_one_table_per_track(make_trial, tmp_path):
     assert md.count("| metric | value | 95% interval | n |") == 2
     assert "## pool" in md and "## swarm" in md
     assert set(json.loads((out / "profile.json").read_text())) == {"pool", "swarm"}
+
+
+def test_profile_json_is_strict(make_trial, tmp_path):
+    runs = tmp_path / "r"
+    for i in range(3):
+        make_trial(condition="team", trial=f"t{i}", reward=1.0, runs=runs)
+        make_trial(condition="solo_B", trial=f"s{i}", reward=0.0, runs=runs)
+    prof = build_profile(load_trials(runs), tmp_path / "tasks", n=20)["pool"]
+    assert prof["multiplier[team]"]["value"] == math.inf  # unreached
+    assert math.isnan(prof["infra_error_trials"]["lo"])  # an empty interval
+    write_profile({"pool": prof}, tmp_path / "out")
+
+    def reject(constant):
+        raise ValueError(constant)
+    data = json.loads((tmp_path / "out" / "profile.json").read_text(), parse_constant=reject)
+    assert data["pool"]["multiplier[team]"]["value"] == "inf"
+    assert data["pool"]["infra_error_trials"]["lo"] is None
+    assert "∞" in (tmp_path / "out" / "profile.md").read_text()

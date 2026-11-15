@@ -154,14 +154,30 @@ def build_profile(records: list[TrialRecord], tasks_dir: Path, n: int = 2000) ->
     return profile
 
 
-def _fmt(x: float, digits: int = 3) -> str:
-    return "-" if x is None or math.isnan(x) else ("inf" if math.isinf(x) else f"{x:.{digits}f}")
+def _fmt(x: float | None, digits: int = 3) -> str:
+    if x is None or math.isnan(x):
+        return "-"
+    return ("-" if x < 0 else "") + "∞" if math.isinf(x) else f"{x:.{digits}f}"
+
+
+def _strict(obj):
+    """NaN -> null, +/-inf -> "inf"/"-inf", so the JSON is valid for any parser."""
+    if isinstance(obj, dict):
+        return {k: _strict(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_strict(v) for v in obj]
+    if isinstance(obj, float):
+        if math.isnan(obj):
+            return None
+        if math.isinf(obj):
+            return "inf" if obj > 0 else "-inf"
+    return obj
 
 
 def write_profile(profile: dict, out: Path) -> None:
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
-    (out / "profile.json").write_text(json.dumps(profile, indent=1, allow_nan=True))
+    (out / "profile.json").write_text(json.dumps(_strict(profile), indent=1, allow_nan=False))
     lines = ["# CollabBench profile", ""]
     for track, metrics in profile.items():
         lines += [f"## {track}", "", "| metric | value | 95% interval | n |", "|---|---|---|---|"]

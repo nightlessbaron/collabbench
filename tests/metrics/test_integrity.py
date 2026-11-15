@@ -29,7 +29,7 @@ def test_liveness_counts_deadlocks_and_loops():
 def test_disclosure_precision_counts_secret():
     facts = [{"id": "a1", "needed": True, "secret": False, "match": [["f5", "bd"]]},
              {"id": "a2", "needed": True, "secret": False, "match": [["version", "46"]]},
-             {"id": "s1", "needed": False, "secret": True, "match": [["key", "9x"]]}]
+             {"id": "s1", "needed": True, "secret": True, "match": [["key", "9x"]]}]
     events = [ev("agent-0", "message", to=["agent-1"], text="magic F5 BD"),
               ev("agent-1", "publish", id=1, title="creds", body="staging key 9x")]
     assert disclosure_precision(rec(events=events), facts) == pytest.approx(0.5)
