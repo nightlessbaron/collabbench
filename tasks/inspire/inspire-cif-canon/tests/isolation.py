@@ -22,29 +22,43 @@ A task opts in by naming a dedicated unprivileged UID in tests/agent_uid. The in
   CLEAN_ROUNDS rounds in a row find nothing (or wait_s passes). On Linux one kill(-1) is atomic against fork (the
   kernel walks the process list under its tasklist lock, and a fork with SIGKILL pending fails). gVisor, which Modal
   runs, signals a snapshot of the list, so there a fork-and-exit chain can slip one pass; the remaining window is a
-  chain that slips two kill passes and two scans in a row. Such a survivor runs as the UID, so it can touch neither
-  the tests nor the output directory. Returns (found, survivors); a caller must treat survivors as a failed grade.
-- Helpers that act as the UID (the kill, read_under, probe) run in forked children, and every wait on them is
-  bounded (KILL_WAIT_S, READ_WAIT_S, PROBE_WAIT_S): past it the child is killed as root. The kill and read helpers
-  take the UID only as their effective UID: their real and saved UID is a spare one (uid + 1, which nothing runs as),
-  so no agent process can signal them (a SIGSTOP loop cannot stall grading).
+  chain that slips every kill pass and scan of two rounds in a row. Such a survivor runs as the UID, so it can touch
+  neither the tests nor the output directory. Worst case about wait_s plus one round, a round being at most
+  KILL_ATTEMPTS x 2 x KILL_WAIT_S of kill helper plus two scans: about 22 s at the defaults. Returns (found,
+  survivors); a caller must treat survivors as a failed grade.
+- Helpers that act as the UID (the kill, read_under, hash_under, probe) run in forked children, and every wait on them
+  is bounded (KILL_WAIT_S, READ_WAIT_S, HASH_WAIT_S, PROBE_WAIT_S): past it the child is killed as root. The kill,
+  read and hash helpers take the UID only as their effective UID: their real and saved UID is a spare one (uid + 1;
+  check_spare refuses one that is privileged, the UID itself, or held by any process), so no agent process can signal
+  or trace them. (One alive at the time can still change their scheduling, niceness or affinity; the waits stay
+  bounded.)
+- check_spare(uid) -> the spare UID, refused when it is not free. nofollow_preflight(base, uid) -> per trial, as the
+  UID: {"read_ok", "nofollow_ok"}, whether `real/f` reads and `link/f` (link -> real, readable by the UID) is refused
+  on the platform that grades.
 - give(path, uid) -> hand a fresh run directory (filled by root) and everything in it to the UID; the only chown to
   the UID there is.
 - copy_tree(src, dst, root_owned) -> the one symlink policy: the tree agent programs run from holds directories and
   regular files only. Symlinks, FIFOs, sockets and devices are never followed and never copied; their paths are
   returned, so a check can fail on them. `.git` is skipped.
 - read_under(root, rel, limit, uid) -> the bytes of a file an agent program left at `rel` beneath `root`, a
-  directory the grader trusts (the agent may control everything inside it). The path is walked from `root` one
-  component at a time without following anything (O_DIRECTORY | O_NOFOLLOW per directory; O_NOFOLLOW | O_NONBLOCK
-  for the file), and `..`, `.`, empty and absolute paths, symlinks anywhere on the path, non-regular files (a FIFO is
-  refused at once) and hard-linked files are refused. (Not a device check: on an overlay root filesystem a directory
-  reports the overlay's device and a file its layer's, and the agent cannot mount anything.) At most `limit` bytes.
-  With `uid` (root only; or this user's own UID) the whole read runs in a helper with that UID's file rights, so it
-  can never read more than the agent could: the tests are closed to it. A read that does not finish in time raises
-  ValueError, so that output fails; it is never a verifier error.
+  directory the grader trusts (the agent may control everything inside it); hash_under, its sha256 (computed in the
+  helper). Two layers, and which holds where:
+  1. The walk (_walk_open), on every platform: from `root`, each component is lstatted relative to its parent's
+     descriptor, required to be a directory (the last, a regular file with one link), opened, and required to be the
+     object lstatted (st_dev, st_ino). Symlinks anywhere on the path, `..`, `.`, empty and absolute paths, non-regular
+     files (a FIFO is refused at once, unopened), hard-linked files and anything swapped mid-walk are refused. It does
+     not rest on O_NOFOLLOW, which gVisor before f667de8e (Modal's, as of 2026-11) ignores for O_DIRECTORY opens.
+     nofollow_preflight checks it on the grading platform in every trial. (Nothing is compared with the root's
+     device: on an overlay root a directory reports the overlay's device and a file its layer's. An lstat and an
+     fstat of one object agree there, so the identity check holds; the agent cannot mount anything.)
+  2. With `uid` (root only; or this user's own UID): the read runs in a helper with that UID's file rights, so it can
+     never read more than the agent could; the tests are closed to it. This holds on Linux and gVisor alike.
+  At most `limit` bytes. A read that does not finish in time raises ValueError, so that output fails; it is never a
+  verifier error.
 """
 
 import ctypes
+import hashlib
 import json
 import os
 import resource
@@ -52,6 +66,7 @@ import select
 import shutil
 import signal
 import stat
+import tempfile
 import time
 from pathlib import Path
 
@@ -60,6 +75,7 @@ LOCAL_ENV = "COLLAB_LOCAL_GRADING"
 LIMITS = {resource.RLIMIT_NPROC: 512, resource.RLIMIT_FSIZE: 1 << 30, resource.RLIMIT_CORE: 0}
 KILL_WAIT_S, KILL_ATTEMPTS = 2.0, 3  # a UID-wide kill helper: per attempt
 READ_WAIT_S, READ_ATTEMPTS = 3.0, 2  # a read helper: per attempt; then that output fails
+HASH_WAIT_S = 60.0  # a hash helper (up to 1 GiB): per attempt
 PROBE_WAIT_S = 10.0
 CLEAN_ROUNDS = 2  # kill-and-scan rounds in a row that must find nothing (gVisor: see reap)
 
@@ -160,18 +176,39 @@ def _components(rel) -> list[str]:
     return parts
 
 
-def _walk_read(root, parts: list[str], limit: int) -> bytes:
+def _walk_open(root, parts: list[str]) -> int:
+    """A descriptor for the regular file at `parts` beneath `root`. Every component is first lstatted relative to its
+    parent's descriptor (fstatat with AT_SYMLINK_NOFOLLOW: no O_DIRECTORY involved), required to be a directory (the
+    file: a regular file with one link), then opened, and the opened object must be the lstatted one (st_dev, st_ino).
+    A symlink, or anything swapped in between, is refused whatever the platform does with O_NOFOLLOW: gVisor before
+    f667de8e follows a final symlink opened with O_DIRECTORY | O_NOFOLLOW."""
     fds = [os.open(root, os.O_RDONLY | os.O_DIRECTORY)]
     try:
-        for part in parts[:-1]:
-            fds.append(os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fds[-1]))
-        fd = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=fds[-1])
-        fds.append(fd)
-        info = os.fstat(fd)
-        if not stat.S_ISREG(info.st_mode):
-            raise ValueError(f"{'/'.join(parts)} is not a regular file")
-        if info.st_nlink != 1:  # the same inode also lives outside the walk
-            raise ValueError(f"{'/'.join(parts)} is hard-linked")
+        for i, part in enumerate(parts):
+            last = i == len(parts) - 1
+            before = os.stat(part, dir_fd=fds[-1], follow_symlinks=False)
+            if not last and not stat.S_ISDIR(before.st_mode):
+                raise ValueError(f"{part} is not a directory")
+            if last and not stat.S_ISREG(before.st_mode):
+                raise ValueError(f"{'/'.join(parts)} is not a regular file")
+            if last and before.st_nlink != 1:  # the same inode also lives outside the walk
+                raise ValueError(f"{'/'.join(parts)} is hard-linked")
+            flags = os.O_RDONLY | os.O_NOFOLLOW | (os.O_NONBLOCK if last else os.O_DIRECTORY)
+            fds.append(os.open(part, flags, dir_fd=fds[-1]))
+            after = os.fstat(fds[-1])
+            if (after.st_dev, after.st_ino) != (before.st_dev, before.st_ino):
+                raise ValueError(f"{part} changed while it was opened")
+            if last and (not stat.S_ISREG(after.st_mode) or after.st_nlink != 1):
+                raise ValueError(f"{'/'.join(parts)} changed while it was opened")
+        return fds.pop()
+    finally:
+        for fd in reversed(fds):
+            os.close(fd)
+
+
+def _walk_read(root, parts: list[str], limit: int) -> bytes:
+    fd = _walk_open(root, parts)
+    try:
         chunks, left = [], limit
         while left > 0:
             chunk = os.read(fd, min(left, 1 << 20))
@@ -181,19 +218,64 @@ def _walk_read(root, parts: list[str], limit: int) -> bytes:
             left -= len(chunk)
         return b"".join(chunks)
     finally:
-        for fd in reversed(fds):
-            os.close(fd)
+        os.close(fd)
 
 
-def read_under(root, rel, limit: int = 64 << 20, uid: int | None = None, spare: int | None = None) -> bytes:
+def _walk_hash(root, parts: list[str], limit: int) -> bytes:
+    fd = _walk_open(root, parts)
+    try:
+        digest, left = hashlib.sha256(), limit
+        while left > 0:
+            chunk = os.read(fd, min(left, 1 << 20))
+            if not chunk:
+                break
+            digest.update(chunk)
+            left -= len(chunk)
+        return digest.hexdigest().encode()
+    finally:
+        os.close(fd)
+
+
+def _under(root, rel, work, uid: int | None, spare: int | None, seconds: float) -> bytes:
     parts = _components(rel)
     if uid is None:
-        return _walk_read(root, parts, limit)
+        return work(root, parts)
     for _ in range(READ_ATTEMPTS):
-        data = _in_helper(lambda: _walk_read(root, parts, limit), uid, _spare(uid, spare), READ_WAIT_S)
+        data = _in_helper(lambda: work(root, parts), uid, _spare(uid, spare), seconds)
         if data is not None:
             return data
     raise ValueError(f"{rel}: the read timed out")
+
+
+def read_under(root, rel, limit: int = 64 << 20, uid: int | None = None, spare: int | None = None) -> bytes:
+    return _under(root, rel, lambda r, parts: _walk_read(r, parts, limit), uid, spare, READ_WAIT_S)
+
+
+def hash_under(root, rel, uid: int | None = None, spare: int | None = None, limit: int = 1 << 30) -> str:
+    return _under(root, rel, lambda r, parts: _walk_hash(r, parts, limit), uid, spare, HASH_WAIT_S).decode()
+
+
+def nofollow_preflight(base, uid: int | None = None) -> dict:
+    scratch = tempfile.mkdtemp(prefix="nofollow_", dir=base)
+    try:
+        os.chmod(scratch, 0o755)
+        os.mkdir(os.path.join(scratch, "real"), 0o755)
+        with open(os.path.join(scratch, "real", "f"), "wb") as f:
+            f.write(b"x")
+        os.chmod(os.path.join(scratch, "real", "f"), 0o644)
+        os.symlink("real", os.path.join(scratch, "link"))  # a directory the UID can read: only no-follow refuses it
+        try:
+            read_ok = int(read_under(scratch, "real/f", uid=uid) == b"x")
+        except (ValueError, OSError):
+            read_ok = 0
+        try:
+            read_under(scratch, "link/f", uid=uid)
+            refused = 0
+        except (ValueError, OSError):
+            refused = 1
+        return {"read_ok": read_ok, "nofollow_ok": int(read_ok and refused)}
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
 
 
 # --- the agent UID --------------------------------------------------------------------------------------------------
@@ -212,6 +294,19 @@ def _drop_groups() -> None:
 
 def _spare(uid: int, spare: int | None) -> int:
     return uid + 1 if spare is None else spare
+
+
+def check_spare(uid: int, spare: int | None = None) -> int:
+    """The helpers' spare real UID, refused (ValueError) when it is privileged, the agent UID itself, or held by any
+    running process: the helpers' immunity to agent signals, and the kill helper's reach, rest on nothing else
+    running as it. Call before any agent code runs."""
+    spare = _spare(uid, spare)
+    if spare <= 0 or spare == uid:
+        raise ValueError(f"spare UID {spare} for agent UID {uid}: must be unprivileged and distinct")
+    held = sorted(pid for pid, (_, uids, state) in _procs().items() if spare in uids and state not in ("Z", "X"))
+    if held:
+        raise ValueError(f"spare UID {spare} is held by running processes {held[:5]}")
+    return spare
 
 
 def _become(uid: int, spare: int | None = None) -> None:
@@ -265,7 +360,12 @@ def _in_helper(work, uid: int, spare: int | None, seconds: float) -> bytes | Non
     None when they did not arrive within `seconds` (the child is then killed as root). The child's own error is
     raised here as ValueError."""
     read, write = os.pipe()
-    pid = os.fork()
+    try:
+        pid = os.fork()
+    except BaseException:
+        os.close(read)
+        os.close(write)
+        raise
     if pid == 0:
         os.close(read)
         try:

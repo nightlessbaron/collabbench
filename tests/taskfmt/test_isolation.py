@@ -6,6 +6,7 @@ namespace (`unshare -r -p`), where this user is root and nothing outside is visi
 
 import os
 import resource
+from pathlib import Path
 import subprocess
 import sys
 import textwrap
@@ -99,8 +100,82 @@ OVERLAY_READ = textwrap.dedent("""
     root = sys.argv[1]
     devices = (os.stat(root).st_dev, os.stat(os.path.join(root, "run/out/w1.json")).st_dev)
     print("DEVICES", *devices)
+    for rel, flags in (("run", os.O_DIRECTORY), ("run/out", os.O_DIRECTORY), ("run/out/w1.json", 0)):
+        before = os.stat(os.path.join(root, rel), follow_symlinks=False)  # what the walk lstats ...
+        fd = os.open(os.path.join(root, rel), os.O_RDONLY | flags)
+        after = os.fstat(fd)  # ... and what it then fstats: the same object must report the same identity
+        os.close(fd)
+        print("SAME" if (before.st_dev, before.st_ino) == (after.st_dev, after.st_ino) else "DIFFERENT", rel)
     print(iso.read_under(root, "run/out/w1.json").decode())
 """)
+
+
+def gvisor_open(real_open):
+    """os.open as gVisor before f667de8e behaves: O_DIRECTORY | O_NOFOLLOW follows a final symlink anyway."""
+    def opener(path, flags, mode=0o777, *, dir_fd=None):
+        if flags & os.O_DIRECTORY:
+            flags &= ~os.O_NOFOLLOW
+        return real_open(path, flags, mode, dir_fd=dir_fd)
+    return opener
+
+
+def test_read_under_refuses_links_where_o_nofollow_is_ignored(tmp_path, monkeypatch):
+    """N-A: Modal's gVisor follows a symlink opened with O_DIRECTORY | O_NOFOLLOW, so on Modal the walk followed
+    `out -> real_out` (a directory the agent can read, holding correct-looking outputs). Each step now lstats the
+    name first and requires the opened object to be the one it lstatted, whatever O_NOFOLLOW does."""
+    run = tmp_path / "run"
+    (run / "real_out" / "notation").mkdir(parents=True)
+    (run / "real_out" / "notation" / "w1.json").write_text("forged")
+    (run / "out").symlink_to("real_out")
+    (run / "mid").mkdir()
+    (run / "mid" / "notation").symlink_to(run / "real_out" / "notation")
+    monkeypatch.setattr(os, "open", gvisor_open(os.open))
+    assert iso.read_under(run, "real_out/notation/w1.json") == b"forged"  # a real directory reads
+    for rel in ("out/notation/w1.json", "mid/notation/w1.json"):
+        with pytest.raises((ValueError, OSError), match="not a directory"):
+            iso.read_under(run, rel)
+
+
+def test_preflight_records_whether_the_no_follow_layer_holds(tmp_path, monkeypatch):
+    """N-A, per trial: as the agent UID, real/f must read and link/f (link -> real) must be refused. The result is a
+    platform fact (nofollow_ok); the UID drop still protects a trial where it is 0."""
+    assert iso.nofollow_preflight(tmp_path) == {"read_ok": 1, "nofollow_ok": 1}
+
+    def following(root, parts, limit):  # a reader with no no-follow layer at all
+        return Path(root, *parts).read_bytes()[:limit]
+    monkeypatch.setattr(iso, "_walk_read", following)
+    assert iso.nofollow_preflight(tmp_path) == {"read_ok": 1, "nofollow_ok": 0}
+
+
+def test_spare_uid_must_be_free():
+    """N-C: the helpers' spare real UID must be unprivileged, not the agent UID, and run no process."""
+    with pytest.raises(ValueError):
+        iso.check_spare(os.getuid() - 1)  # the spare would be this user, which runs this very process
+    for uid, spare in ((5, 5), (5, 0), (5, -1)):
+        with pytest.raises(ValueError):
+            iso.check_spare(uid, spare)
+    iso.check_spare(2 ** 31 - 10)  # nothing runs as 2**31 - 9
+
+
+def test_hash_under_hashes_in_the_helper(tmp_path):
+    """N-G: a digest is computed where the file is read, so a 1 GiB output never crosses the pipe."""
+    import hashlib
+    (tmp_path / "a").write_bytes(b"abc" * 1000)
+    (tmp_path / "l").symlink_to(tmp_path / "a")
+    assert iso.hash_under(tmp_path, "a", uid=os.getuid()) == hashlib.sha256(b"abc" * 1000).hexdigest()
+    with pytest.raises((ValueError, OSError)):
+        iso.hash_under(tmp_path, "l", uid=os.getuid())
+
+
+def test_a_failed_fork_leaks_no_pipe(monkeypatch):
+    """N-F."""
+    def no_fork():
+        raise OSError(11, "Resource temporarily unavailable")
+    before = len(os.listdir("/proc/self/fd"))
+    monkeypatch.setattr(os, "fork", no_fork)
+    with pytest.raises(OSError):
+        iso._in_helper(lambda: b"", os.getuid(), None, 1.0)
+    assert len(os.listdir("/proc/self/fd")) == before
 
 
 def test_read_under_reads_files_on_an_overlay_root(tmp_path):
@@ -119,6 +194,7 @@ def test_read_under_reads_files_on_an_overlay_root(tmp_path):
         pytest.skip(f"no overlay mount in a user namespace here: {run.stderr.strip()[-300:]}")
     devices = run.stdout.split("DEVICES", 1)[1].split()[:2]
     assert devices[0] != devices[1], "this overlay reports one device; the test would not show the bug"
+    assert "DIFFERENT" not in run.stdout and run.stdout.count("SAME") == 3, run.stdout  # N-A's identity check holds
     assert run.stdout.strip().endswith("mine"), (run.stdout, run.stderr[-2000:])
 
 

@@ -38,8 +38,10 @@ def run_pytest(workspace: Path, hidden: Path = HIDDEN, timeout_s: int = 600) -> 
         for case in ET.parse(junit).getroot().iter("testcase"):
             bad = [child for child in case if child.tag in ("failure", "error", "skipped")]
             results[case.get("name", "")] = not bad
-            if bad:  # why, for details.json (never shown to the agents)
-                failures[case.get("name", "")] = (bad[0].get("message") or bad[0].text or bad[0].tag)[:500]
+            if bad:  # why, for details.json (never shown to the agents): the first line only, which is the
+                # exception and its message; pytest's assertion introspection after it can hold expected values
+                why = (bad[0].get("message") or bad[0].text or bad[0].tag).strip()
+                failures[case.get("name", "")] = (why.splitlines() or [bad[0].tag])[0][:500]
     if pinned is not None:  # pinned from the reference run: a test missing from the report counts as failed
         results = {name: results.get(name, False) for name in pinned}
     if not results:

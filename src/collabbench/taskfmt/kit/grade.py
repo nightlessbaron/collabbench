@@ -8,7 +8,12 @@ Agent code that runs during grading must not change the grade, nor cost the tria
 - a task that names an agent UID (tests/agent_uid) is graded only isolated: as root, after isolation.lockdown and a
   passing isolation.probe, with agent code running as that UID. Without root it is graded only when local grading is
   asked for explicitly (isolation.LOCAL_ENV, as localcheck sets it); otherwise grading refuses (`verifier_error`) and
-  no agent code runs. reward.json records `isolated` (1/0) for every such task;
+  no agent code runs. reward.json records `isolated` (1/0) for every such task. Isolated, the helpers' spare UID must
+  be free (isolation.check_spare), or grading refuses;
+- every such task runs isolation.nofollow_preflight first (as the agent UID when isolated) and records `nofollow_ok`
+  (1/0): whether reading through a planted directory symlink is refused on this platform. A 0 is a platform fact for
+  the gate to report, not a reason to void the trial (the UID drop still bounds every read); a preflight that cannot
+  read a plain file at all is a verifier error;
 - the tripwire is read, and the tests directory digested, before anything is scored;
 - a zero reward (`grading_incomplete`) is written before any agent code runs, so a grader killed or crashed after
   that point still leaves a reward that counts;
@@ -98,18 +103,32 @@ def grade(workspace: Path, snapshots: Path, tripwire: Path, out: Path, deadline_
     record = {} if uid is None else {"isolated": int(mode == "isolated")}
     isolation.become_subreaper()
     out.mkdir(parents=True, exist_ok=True)
-    if mode == "refuse":
-        why = "the task runs agent code as its agent UID, and the verifier is not root"
+
+    def refuse(why: dict) -> dict:  # a verifier error; no agent code has run
         _write(out, "reward.json", json.dumps({"reward": 0.0, "verifier_error": 1, **record}))
-        _write(out, "details.json", json.dumps({"error": why}))
+        _write(out, "details.json", json.dumps(why))
         return {"reward": 0.0, "verifier_error": 1, **record}
+
+    if mode == "refuse":
+        return refuse({"error": "the task runs agent code as its agent UID, and the verifier is not root"})
     if mode == "isolated":  # before any agent code runs
+        try:
+            isolation.check_spare(uid)
+        except ValueError as e:
+            return refuse({"error": f"the helpers' spare UID is not free: {e}"})
         isolation.lockdown(HERE, [out, workspace, snapshots, tripwire])
         leaks = isolation.probe(uid, HERE, [out, workspace, snapshots])
         if leaks:
-            _write(out, "reward.json", json.dumps({"reward": 0.0, "verifier_error": 1, **record}))
-            _write(out, "details.json", json.dumps({"error": "the agent UID is not shut out", "probe": leaks}))
-            return {"reward": 0.0, "verifier_error": 1, **record}
+            return refuse({"error": "the agent UID is not shut out", "probe": leaks})
+    preflight = {}
+    if uid is not None:  # read_under's no-follow layer, on the platform that grades (before any agent code)
+        try:
+            preflight = isolation.nofollow_preflight(tempfile.gettempdir(), uid=uid if mode == "isolated" else None)
+        except Exception as e:  # noqa: BLE001 - e.g. no writable temp directory: fail closed, as a verifier error
+            preflight = {"read_ok": 0, "nofollow_ok": 0, "error": f"{type(e).__name__}: {e}"}
+        record["nofollow_ok"] = int(preflight.get("nofollow_ok", 0))
+        if not preflight.get("read_ok"):
+            return refuse({"error": "the preflight could not read a plain file", "preflight": preflight})
     sweep = uid if mode == "isolated" else None
     digest = tests_digest()
     lines = tripwire.read_text().splitlines() if tripwire.is_file() else None  # before agent code can touch it
@@ -154,7 +173,8 @@ def grade(workspace: Path, snapshots: Path, tripwire: Path, out: Path, deadline_
         if truncated:
             reward["snapshots_truncated"] = truncated
         _write(out, "reward.json", json.dumps(reward))
-        _write(out, "details.json", json.dumps({"final": final, "trace": trace}, indent=1))
+        _write(out, "details.json", json.dumps({"final": final, "trace": trace, **({"preflight": preflight}
+                                                                                     if preflight else {})}, indent=1))
         return reward
 
     final = scored(workspace, budget())

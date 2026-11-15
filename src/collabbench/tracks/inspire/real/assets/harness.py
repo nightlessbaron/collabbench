@@ -13,8 +13,11 @@ runs as root, as it does in the verifier container (isolation.mode is "isolated"
   from, so a program can neither change what is graded nor write next to it. The copy holds directories and regular
   files only: symlinks and special files are dropped, and listed in SKIPPED for checks that must fail on them;
 - a program's output goes to files, read back at most OUTPUT_LIMIT bytes, so no output size can exhaust memory;
-- files the programs leave are read as the agent UID, walked from the work root without following any link
-  (read_regular, isolation.read_under): a symlinked output directory cannot make root read the tests;
+- files the programs leave are read back through isolation.read_under (read_regular, sha256), which has two layers:
+  the walk from the work root refuses every symlink by lstat and identity checks on each component (on every
+  platform, gVisor included, where a no-follow open alone is not honoured for directories), and the read runs as
+  the agent UID, so even a link the walk missed could reach nothing the agents cannot already read: never the
+  tests. grade.py checks the walk per trial on the grading platform (reward.json: nofollow_ok);
 - after every run, every process of the UID and every descendant of this process (a child subreaper) is killed
   (isolation.reap), and the run returns only once none is left.
 Without root, agent programs run only under explicit local grading (isolation.LOCAL_ENV, as localcheck sets it), as
@@ -27,7 +30,6 @@ charged to it, and once the budget is spent its remaining runs fail as timeouts 
 """
 
 import atexit
-import hashlib
 import importlib.util
 import json
 import os
@@ -159,14 +161,20 @@ def fresh_run_dir(files=None):
 
 def read_regular(path, limit=64 << 20):
     """Bytes of a regular file the agents left, in the graded copy or a run directory: read as the agent UID when
-    isolated (never more than the agents could read), walked from the work root without following any link, never
+    isolated (never more than the agents could read), walked from the work root refusing every link, never
     blocking, never more than `limit` (isolation.read_under). Any other path is refused."""
+    rel = _rel(path)  # first: it sets up the work root
+    return iso.read_under(_root[0], rel, limit, uid=AGENT_UID if ISOLATED else None)
+
+
+def _rel(path):
+    """`path` relative to the work root; refused unless it lies beneath it."""
     setup_work()
     path = os.fspath(path)
     rel = os.path.relpath(path, _root[0]) if os.path.isabs(path) and ".." not in path.split("/") else ".."
     if rel == ".." or rel.startswith("../"):
         raise ValueError(f"{path} is not in the graded workspace or a run directory")
-    return iso.read_under(_root[0], rel, limit, uid=AGENT_UID if ISOLATED else None)
+    return rel
 
 
 def read_text(path, limit=64 << 20):
@@ -178,7 +186,10 @@ def read_json(path):
 
 
 def sha256(path):
-    return hashlib.sha256(read_regular(path, 1 << 30)).hexdigest()
+    """Hex sha256 of a file the agents left (up to 1 GiB), read like read_regular but hashed where it is read: only
+    the digest crosses back from the helper (isolation.hash_under)."""
+    rel = _rel(path)
+    return iso.hash_under(_root[0], rel, uid=AGENT_UID if ISOLATED else None)
 
 
 def close(got, want, rel=0.005, abs_tol=1e-9):

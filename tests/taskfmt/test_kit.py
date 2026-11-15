@@ -123,6 +123,7 @@ def test_details_keep_why_each_test_failed(tmp_path):
                     str(tmp_path / "none"), "--tripwire", str(tmp_path / "none"), "--out", str(out)], check=True)
     final = json.loads((out / "details.json").read_text())["final"]
     assert set(final["failures"]) == {"test_R2_add_negative"} and "-5" in final["failures"]["test_R2_add_negative"]
+    assert "\n" not in final["failures"]["test_R2_add_negative"]  # N-D: the first line only, no introspection
     assert "failures" not in json.loads((out / "reward.json").read_text())
 
 
@@ -293,6 +294,20 @@ def test_grade_records_isolation_when_the_task_names_an_agent_uid(tmp_path):
     reward = json.loads((out / "reward.json").read_text())
     assert reward["reward"] == 1.0 and reward["agent_processes_left"] == 0 and "tests_tampered" not in reward
     assert reward["isolated"] == (1 if os.geteuid() == 0 else 0)
+    assert reward["nofollow_ok"] == 1  # N-A's per-trial preflight; Linux honours O_NOFOLLOW
+
+
+def test_a_platform_that_follows_links_neither_voids_nor_crashes_the_trial(tmp_path):
+    """N-A: nofollow_ok 0 is a platform fact for the gate; the UID drop still protects the trial, so it counts."""
+    d = write_task(isolating_spec(), tmp_path / "t")
+    with open(d / "tests" / "isolation.py", "a") as f:  # this platform's walk follows links
+        f.write("\n\ndef nofollow_preflight(base, uid=None):\n    return {'read_ok': 1, 'nofollow_ok': 0}\n")
+    ws, out = tmp_path / "ws", tmp_path / "out"
+    ws.mkdir()
+    (ws / "calc.py").write_text("def add(a, b):\n    return a + b\n")
+    subprocess.run(grade_cmd(d, ws, tmp_path, out), check=True, env=local_env())
+    reward = json.loads((out / "reward.json").read_text())
+    assert reward["reward"] == 1.0 and reward["nofollow_ok"] == 0 and "verifier_error" not in reward
 
 
 def test_grade_refuses_to_run_agent_code_unisolated(tmp_path):

@@ -30,11 +30,14 @@ while time.time() < end:
 
 
 def program(tests: str, out: str, expected: list[str], daemon: bool = True,
-            steal: tuple[str, str] | None = None, plant: tuple[str, str] | None = None) -> str:
+            steal: tuple[str, str] | None = None, plant: tuple[str, str] | None = None,
+            identity: bool = False) -> str:
     """Source that rewrites `tests` (expected_tests.json := `expected`; score.py always scores 1.0), with `daemon`
     leaves the daemon watching `out`, with `plant` = (expression for a link path, target) makes that symlink, and
     with `steal` = (library path, expression over `_lib` and `_sys.argv`) prints that expression as JSON and exits
-    when the library can be read. Append the module's ordinary code."""
+    when the library can be read, and with `identity` ends by writing one line of its own os.getresuid(),
+    os.getresgid() and sorted os.getgroups(), `resuid=(r, e, s) resgid=(r, e, s) groups=[...]` (identity_line), to
+    stderr and exiting 3. Append the module's ordinary code (unreached with `identity`)."""
     score = "def score(workspace):\n    return {'reward': 1.0, 'requirements': {}}\n"
     src = f'''import json as _json, os as _os, sys as _sys
 for _rel, _text in (("hidden/expected_tests.json", _json.dumps({expected!r})), ("score.py", {score!r})):
@@ -77,7 +80,16 @@ else:
     print(_json.dumps(_answer))
     _sys.exit(0)
 '''
+    if identity:
+        src += '''_sys.stderr.write(f"resuid={_os.getresuid()} resgid={_os.getresgid()} groups={sorted(_os.getgroups())}")
+_sys.exit(3)
+'''
     return src
+
+
+def identity_line(resuid, resgid, groups) -> str:
+    """What a program made with `identity` writes, for these IDs."""
+    return f"resuid={tuple(resuid)} resgid={tuple(resgid)} groups={sorted(groups)}"
 
 
 def survivors(out: str) -> list[int]:

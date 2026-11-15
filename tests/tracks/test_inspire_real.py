@@ -498,39 +498,81 @@ def test_score_d3_fails_on_a_symlink_under_publish(tmp_path):
     assert failed(r) <= {n for n in r["tests"] if n.startswith("test_D3_")}
 
 
-PLANT_IN_RUN_DIR = {  # the parent-symlink attack: the run directory's out/ -> the tests' hidden directory
-    cif_canon.NAME: '_os.path.join(_os.path.dirname(_os.path.abspath(_sys.argv[1])), "out")',
-    score_recovery.NAME: '_os.path.join(_sys.argv[-1], "out")'}
+REFERENCE_FIRST = 'bash "$(dirname "$0")/reference.sh"\n'  # the reference, kept beside solve.sh
+PLANT_BUILD = '''import os, subprocess, sys
+_here = os.path.dirname(os.path.abspath(__file__))
+_build = subprocess.run([sys.executable, os.path.join(_here, "_reference_build_catalog.py"), *sys.argv[1:]])
+_root = sys.argv[-1]
+if sys.argv[1:2] != ["--reset"] and os.path.isdir(os.path.join(_root, "out")):
+    os.rename(os.path.join(_root, "out"), os.path.join(_root, "real_out"))
+    os.symlink("real_out", os.path.join(_root, "out"))  # correct outputs the agent UID can read: only no-follow refuses
+sys.exit(_build.returncode)
+'''
 
 
-def live_hostile_solution(name: str) -> str:
-    """solve.sh for the live test: the hostile program where the verifier will run it as the agent UID."""
-    plant = (PLANT_IN_RUN_DIR[name], "/tests/hidden")
-    if name == cif_canon.NAME:  # cif/parse.py also tries to read the reference library and print its answer
-        program = hostile.program("/tests", "/logs/verifier", [], plant=plant,
-                                  steal=(f"/tests/hidden/{cif_canon.LIB}", STEAL_CIF)) + 'print("{}")\n'
-        return f'mkdir -p "$W/cif"\ncat > "$W/cif/parse.py" <<\'PY\'\n{program}PY\n'
-    program = hostile.program("/tests", "/logs/verifier", [], plant=plant)  # build_catalog.py: out/ -> /tests/hidden
-    return f'bash "$(dirname "$0")/reference.sh"\ncat > "$W/build_catalog.py" <<\'PY\'\n{program}PY\n'
+def hostile_solution(name: str) -> str:
+    """solve.sh (after its preamble) for the hostile trial of task `name`: the reference first, then the hostile
+    programs where the verifier runs them as the agent UID. Each reports its own IDs on a channel the verifier keeps
+    (a failing program's stderr is the failure message in details.json)."""
+    if name == cif_canon.NAME:  # cif/parse.py: tries the reference library, then reports its IDs and exits 3
+        parse = hostile.program("/tests", "/logs/verifier", [], identity=True,
+                                steal=(f"/tests/hidden/{cif_canon.LIB}", STEAL_CIF))
+        return REFERENCE_FIRST + f'cat > "$W/cif/parse.py" <<\'PY\'\n{parse}PY\n'
+    build = hostile.program("/tests", "/logs/verifier", []) + PLANT_BUILD
+    selftest = hostile.program("/tests", "/logs/verifier", [], daemon=False, identity=True)
+    return (REFERENCE_FIRST + 'cp "$W/build_catalog.py" "$W/_reference_build_catalog.py"\n'
+            + f'cat > "$W/build_catalog.py" <<\'PY\'\n{build}PY\n'
+            + f'cat > "$W/publish/toolkit/selftest.py" <<\'PY\'\n{selftest}PY\n')
+
+
+def hostile_task(name: str, tmp_path: Path) -> Path:
+    d = tmp_path / name
+    shutil.copytree(task_dir(name), d)
+    shutil.copy(d / "solution" / "solve.sh", d / "solution" / "reference.sh")
+    (d / "solution" / "solve.sh").write_text('#!/bin/bash\nset -euo pipefail\nW="${WORKSPACE:-/workspace}"\n'
+                                             + hostile_solution(name))
+    return d
+
+
+def assert_hostile_contained(name: str, final: dict, identity: str) -> None:
+    """What the hostile trial must show, positively. `final` is details.json's final score (or a local score)."""
+    tests, failures, requirements = final["tests"], final["failures"], final["requirements"]
+    if name == cif_canon.NAME:
+        # parse.py ran, as `identity`, and could not load the reference library (it would have printed the answer)
+        assert identity in failures["test_D1_visible"], failures.get("test_D1_visible")
+        assert not requirements["D1"]
+        # the reference's files read back through the UID helper (D2's summary tests grade parse.py's output too)
+        assert tests["test_D1_present"] and tests["test_D2_present"]
+    else:
+        # the scrubbed toolkit's selftest ran as `identity`; the reference reader ran and graded correct
+        assert identity in failures["test_D3_publish_toolkit_still_works"], failures
+        assert requirements["D1"] and tests["test_D3_publish_data_bundle_schema"]
+        # out -> real_out (correct outputs, readable by the agent UID) is refused by the walk alone
+        assert "out is not a directory" in failures["test_D2_build_catalog_notation"], failures
+
+
+@pytest.mark.parametrize("name", sorted(BUILDERS))
+def test_hostile_solutions_hold_locally(tmp_path, name):
+    """N-B: the live test's hostile solutions and assertions, run here through localcheck (as this user)."""
+    d = hostile_task(name, tmp_path)
+    final = score_locally(d, "reference")
+    assert_hostile_contained(name, final, hostile.identity_line(os.getresuid(), os.getresgid(), os.getgroups()))
 
 
 @pytest.mark.live
 @pytest.mark.parametrize("name", sorted(BUILDERS))
 def test_live_hostile_agent_program_is_contained(tmp_path, name):
-    """Live (Modal, and a verifier running as root, as Harbor runs it): the oracle agent leaves a hostile program in
-    the workspace; the verifier runs it as the agent UID. It can neither read the reference library, nor make root
-    read the tests through a symlinked output directory, nor write the tests or /logs/verifier, and no process of
-    it outlives its run. Costs one oracle trial per task."""
+    """Live (Modal, and a verifier running as root, as Harbor runs it). The oracle agent runs the reference, then
+    leaves hostile programs that the verifier runs as the agent UID. They prove their own IDs (64000 throughout, no
+    groups); they can neither read the reference library, nor make root read a symlinked output directory, nor write
+    the tests or /logs/verifier; no process of theirs outlives its run; and the per-trial preflight finds the
+    no-follow layer holding (nofollow_ok). Costs one oracle trial per task."""
     from collabbench import settings
     from collabbench.runner.gates import _job, parse_trial
     from collabbench.runner.harbor import harbor_env
     from collabbench.runner.pools import POOLS
 
-    d = tmp_path / name
-    shutil.copytree(task_dir(name), d)
-    shutil.copy(d / "solution" / "solve.sh", d / "solution" / "reference.sh")
-    (d / "solution" / "solve.sh").write_text('#!/bin/bash\nset -euo pipefail\nW="${WORKSPACE:-/workspace}"\n'
-                                             + live_hostile_solution(name))
+    d = hostile_task(name, tmp_path)
     jobs = tmp_path / "jobs"
     subprocess.run(_job(d, "oracle", [], jobs, "hostile"), env=harbor_env(POOLS["personal"]), cwd=settings.REPO,
                    check=True, timeout=3600)
@@ -540,16 +582,8 @@ def test_live_hostile_agent_program_is_contained(tmp_path, name):
     assert trial["exception"] is None and "pwned" not in rewards and rewards["isolated"] == 1
     assert not rewards.get("tests_tampered") and not rewards.get("verifier_error")
     assert rewards["agent_processes_left"] == 0 and not rewards.get("agent_processes_survived")
-    # I2's proof that agent code really ran as UID 64000: no test failed on a launch error (a failed UID drop or
-    # limit would raise in run_agent), and files the programs left were read back through the UID helper.
-    launch_errors = ("PermissionError", "preexec_fn", "SubprocessError", "refusing to run", "Operation not permitted")
-    assert not [n for n, why in final["failures"].items() if any(e in why for e in launch_errors)], final["failures"]
-    if name == cif_canon.NAME:  # it ran, printed its own `{}`, and could not read the reference library
-        assert final["tests"]["test_D1_present"] and final["tests"]["test_D2_present"]
-        assert final["failures"]["test_D1_visible"] and rewards["req_D1"] == 0 and rewards["reward"] <= 0.05
-    else:  # the reference reader ran as the UID; build_catalog's out/ -> /tests/hidden was not read as output
-        assert rewards["req_D1"] == 1 and rewards["req_D3"] == 1 and rewards["req_D2"] == 0
-        assert not final["tests"]["test_D2_build_catalog_notation"]
+    assert rewards["nofollow_ok"] == 1
+    assert_hostile_contained(name, final, hostile.identity_line((64000,) * 3, (64000,) * 3, []))
 
 
 # --- reproducibility ------------------------------------------------------------------------------------------------
