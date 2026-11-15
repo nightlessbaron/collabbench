@@ -76,6 +76,9 @@ memory_mb = {spec.memory_mb}
     _write(env / "Dockerfile", (KIT / "Dockerfile.env").read_text().replace("{reserved_script}", spec.reserved_script)
            .replace("{tripwire_nonce}", nonce))
     _write(env / "tripwire.sh", (KIT / "tripwire.sh").read_text(), 0o755)
+    if not spec.workspace_files:
+        raise ValueError(f"{spec.name}: workspace_files is empty; git does not track empty directories, "
+                         "so the Dockerfile's COPY workspace/ would have nothing to copy. Add at least one file.")
     for rel, text in spec.workspace_files.items():
         _write(env / "workspace" / rel, text)
     (env / "workspace").mkdir(parents=True, exist_ok=True)

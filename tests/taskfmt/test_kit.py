@@ -177,3 +177,9 @@ def test_missing_expected_test_counts_as_failed(tmp_path):
     (d / "tests" / "hidden" / "expected_tests.json").write_text(json.dumps(expected + ["test_R2_ghost"]))
     r = score_locally(d, "reference")
     assert r["reward"] == pytest.approx(2 / 3) and r["requirements"] == {"R1": True, "R2": False}
+
+
+def test_write_task_rejects_empty_workspace(tmp_path):
+    # git does not track empty directories, so `COPY workspace/ /workspace/` would fail to build from a checkout
+    with pytest.raises(ValueError, match="workspace_files"):
+        write_task(toy_spec(workspace_files={}), tmp_path)

@@ -109,6 +109,13 @@ The sources overlap in pairs: {pairs}. Compute spent on both members of a pair p
 benefits less from both than the sum of what each would give alone."""}
 
 
+WORKSPACE_README = """# Workspace
+
+Write your plan to `/workspace/plan.json`. The format is described in the task brief.
+The plan is scored when the run ends.
+"""
+
+
 def task_name(concept: str, seed: int) -> str:
     return f"inspire-{concept.replace('_', '-')}-{seed:04d}"
 
@@ -189,7 +196,7 @@ def generate(concept: str, seed: int, out: Path) -> Path:
     solution = ("mkdir -p \"${WORKSPACE:-/workspace}\"\n"
                 f"cat > \"${{WORKSPACE:-/workspace}}/plan.json\" <<'JSONEOF'\n{json.dumps(sim.optimum(p), indent=1)}\nJSONEOF\n")
     spec = TaskSpec(
-        name=task_name(concept, seed), track="inspire", instruction=_brief(concept, p), workspace_files={},
+        name=task_name(concept, seed), track="inspire", instruction=_brief(concept, p), workspace_files={"README.md": WORKSPACE_README},
         private={"expert.md": fields.NOTES[base], "expert.placebo.md": fields.PLACEBOS[base]},
         manifest={"track": "inspire", "roles": ["solver", "expert"], "workspace": "shared", "owners": {},
                   "reserved_command": RESERVED,

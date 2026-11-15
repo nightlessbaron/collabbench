@@ -206,7 +206,7 @@ def test_layout_manifest_and_private(tasks, concept):
     base = concept.removesuffix("_trap")
     assert text(d / "environment" / "private" / "expert.md") == fields.NOTES[base]
     assert text(d / "environment" / "private" / "expert.placebo.md") == fields.PLACEBOS[base]
-    assert list((d / "environment" / "workspace").iterdir()) == []
+    assert [f.name for f in (d / "environment" / "workspace").iterdir()] == ["README.md"]
     assert (d / "tests" / "sims.py").read_bytes() == (Path(fields.__file__).parent / "sims.py").read_bytes()
     assert json.loads(text(d / "tests" / "sim_params.json")) == {"concept": concept, "params": sim.params(1)}
 
@@ -274,3 +274,17 @@ def test_generate_all_and_deterministic(tmp_path):
         return not (c.left_only or c.right_only or c.diff_files) and all(same(s) for s in c.subdirs.values())
 
     assert same(cmp)
+
+
+@pytest.mark.parametrize("concept", ALL)
+def test_workspace_is_non_empty_and_readme_shares_no_concept_words(tasks, concept):
+    d = tasks[(concept, 1)]
+    ws = d / "environment" / "workspace"
+    assert [f for f in ws.iterdir() if f.is_file()], "an empty workspace is not tracked by git and breaks COPY"
+    readme = ws / "README.md"
+    assert "/workspace/plan.json" in text(readme)
+    private = d / "environment" / "private"
+    for name in ("expert.md", "expert.placebo.md"):
+        shared = {w for w in words(text(readme)) if len(w) >= 5 and not w.isdigit()} - STOPLIST
+        shared &= words(text(private / name))
+        assert not shared, f"README.md shares words with {name}: {sorted(shared)}"
