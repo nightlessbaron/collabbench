@@ -34,9 +34,12 @@ correct?
 
 ## Results so far
 
-Frontier-model runs (Claude via Claude Code on Valkyrie) are in progress and will be added here. The calibration runs
-below use **DeepSeek V4.1 Flash** in our own harness, with 3 runs per cell. Cells with fewer than 3 finished runs are
-marked *running*.
+**Frontier models (in progress):** Claude Opus 5.5 and GPT-6.1 sol (reasoning effort high) are running on the four
+hardest tasks (aldol S4, cohort S4, fiscal S4, poe S1). Each model runs as one agent and as a team of three, with the
+same 3M-token budget per agent. Results will be added here as they finish.
+
+The calibration runs below use **DeepSeek V4.1 Flash** in our own harness, with 3 runs per cell. Cells with fewer
+than 3 finished runs are marked *running*.
 
 ![Mean reward by stage](results/depth_curve.svg)
 
@@ -54,6 +57,30 @@ marked *running*.
 | poe | one agent, 3M tokens | 0.20 | | | |
 
 Raw numbers, including each run, are in `results/deepseek_results.json`.
+
+### Team metrics (planned in the design spec)
+The full score table is in [`results/team_metrics.md`](results/team_metrics.md). `results/team_metrics.py` generates it
+from the run logs, and every cell shows its n. It covers:
+- **Outcome:** collaboration gain (team minus one agent), budget-matched gain (team vs one agent with double budget),
+  interaction gain (team minus the expected best of 3 independent single-agent runs).
+- **Integrity:** report fidelity (no report, false success, say-do accuracy), liveness (deadlock, loop, overrun),
+  unauthorized actions.
+- **Process:** uptake, critical-path ratio, redundancy, lead token share.
+- **Cost:** tokens and minutes.
+
+**Headline (DeepSeek, the 9 tasks with team runs, 3 runs per cell):**
+
+| Condition | Mean reward |
+|---|---|
+| Team of three | 0.894 |
+| One agent | 0.889 |
+| One agent, double budget | 0.970 |
+
+- The team beats double budget only on fiscal S4 (+0.09).
+- On 7 of 9 tasks the team is below the best of three independent single-agent runs.
+- Teams mostly spawn one or two "verifier" or "auditor" helpers, with little uptake of each other's work.
+- When agents write a final report, they usually claim success even when the reward is below 1.
+- Unauthorized actions: 0 in every cell.
 
 ### Failure modes the benchmark exposes
 - **Depth breaks models.** Shallow stages are solved, but scores fall as the chain gets longer. On fiscal and aldol,
