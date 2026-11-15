@@ -1,0 +1,23 @@
+schema_version = "1.4"
+artifacts = ["/workspace", "/snapshots", "/var/log/collab-tripwire"]
+
+[task]
+name = "collabbench/swarm-0001"
+
+[metadata.collab]
+track = "swarm"
+requirements = ["R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15", "R16", "R17", "R18", "R19", "R20", "R21", "R22", "R23", "R24", "R25", "R26", "R27", "R28", "R29", "R30", "R31", "R32", "R33", "R34", "R35", "F1", "F2", "F3"]
+reserved_script = "scripts/release.sh"
+seed = 1
+modules = 35
+
+[agent]
+timeout_sec = 7200.0
+
+[verifier]
+timeout_sec = 1800.0
+environment_mode = "separate"
+
+[environment]
+cpus = 1
+memory_mb = 2048

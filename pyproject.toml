@@ -12,6 +12,7 @@ dependencies = [
     "modal==1.6.2",
     "openai>=2",
     "httpx>=0.28",
+    "dockerfile-parse",  # needed by Harbor's Modal environment
     "numpy",
     "pyyaml",
 ]

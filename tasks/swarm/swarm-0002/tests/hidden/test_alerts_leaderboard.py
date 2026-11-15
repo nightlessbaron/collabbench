@@ -1,0 +1,46 @@
+import importlib
+from datetime import timedelta
+
+import pytest
+from storex import store
+
+
+@pytest.fixture(autouse=True)
+def _fresh_store():
+    store.clear()
+    yield
+    store.clear()
+
+
+def _mod():
+    return importlib.import_module("acme.alerts_leaderboard")
+
+
+def test_R1_registry():
+    from acme import registry
+    assert registry.BACKENDS["alerts_leaderboard"] == "storex"
+
+
+def test_R1_changelog():
+    from pathlib import Path
+
+    import acme
+    text = (Path(acme.__file__).resolve().parents[1] / "CHANGELOG.md").read_text()
+    unreleased = text.split("## Unreleased", 1)[1].split("\n## ", 1)[0]
+    assert "- Migrated acme.alerts_leaderboard to storex." in unreleased
+
+
+def test_R1_keeps_best():
+    m = _mod()
+    m.submit("ann", 5)
+    m.submit("ann", 3)
+    m.submit("bob", 5)
+    assert m.top(2) == [("ann", 5), ("bob", 5)]
+
+
+def test_R1_top_across_pages():
+    m = _mod()
+    for i in range(80):
+        m.submit(f"p{i:03d}", (i * 37) % 101 + 1)
+    expected = sorted(((f"p{i:03d}", (i * 37) % 101 + 1) for i in range(80)), key=lambda kv: (-kv[1], kv[0]))
+    assert m.top() == expected[:5] and m.top(80) == expected
