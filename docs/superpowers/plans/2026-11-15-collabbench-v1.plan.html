@@ -84,16 +84,16 @@ class TeamSettings:
     facts: str = "private"           # "shared": all role notes to all agents
     placebo: str | None = None       # swap one role's notes
     workspace: str | None = None     # shared | worktrees | isolated
-    context_cap: int = 96_000        # the same for every agent
+    context_cap: int | None = None   # None: the full 1M window, for every agent
     effort: str = "high"             # DeepSeek reasoning effort
     # … 7 more: max_turns, evaluate_cap, snapshot_every_s, max_snapshots, …
 </script>
     </doc-schema>
     <doc-ask id="cap">
       <p>What context cap does each agent get?</p>
-      <label><input type="radio" name="cap" value="96k" checked> 96k tokens <small>long Swarm runs use compaction</small></label>
+      <label><input type="radio" name="cap" value="96k"> 96k tokens <small>long Swarm runs use compaction</small></label>
       <label><input type="radio" name="cap" value="200k"> 200k tokens <small>fewer summaries, more tokens per call</small></label>
-      <label><input type="radio" name="cap" value="none"> No cap (1M) <small>one long context can help the solo agent</small></label>
+      <label><input type="radio" name="cap" value="none" checked> No cap (1M) <small>one long context can help the solo agent</small></label>
     </doc-ask>
   </doc-claim>
 
@@ -284,10 +284,10 @@ async def test_key_never_written(tmp_path, monkeypatch):
 <doc-claim>
   <p>The runner stops before a Modal pool spends past its cap.</p>
   <doc-mock frame="terminal" title="freedom" w="460"><template><span class="dim">$</span> collabbench run grids/pilot.yaml
-pool <b>ifm</b>  spent $43.80 of $45.00
+pool <b>personal</b>  spent $179.70 of $180.00
 job pool-0004/team ×3  projected $0.42
-<span class="r">✗ BudgetExceeded</span>: ifm would pass its cap
-  <span class="dim">next: --pool personal ($12.10 of $180.00)</span></template></doc-mock>
+<span class="r">✗ BudgetExceeded</span>: personal would pass its cap
+  <span class="dim">next: --pool ifm ($0.00 of $45.00)</span></template></doc-mock>
 
   <doc-claim>
     <p>Each control is a fixed set of agent kwargs.</p>
@@ -317,8 +317,8 @@ RATES = {"cpu_core_s": 0.00003942, "mem_gib_s": 0.00000667}   # sandbox, 2026-11
     </doc-schema>
     <doc-ask id="order">
       <p>Which Modal pool pays first?</p>
-      <label><input type="radio" name="order" value="ifm" checked> ifm, then personal <small>the $50 pool first, as you said first</small></label>
-      <label><input type="radio" name="order" value="personal"> personal, then ifm <small>keeps the shared ifm credit for later</small></label>
+      <label><input type="radio" name="order" value="ifm"> ifm, then personal <small>the $50 pool first, as you said first</small></label>
+      <label><input type="radio" name="order" value="personal" checked> personal, then ifm <small>keeps the shared ifm credit for later</small></label>
       <label><input type="radio" name="order" value="split"> Split by track <small>Swarm on personal; Pool and Inspire on ifm</small></label>
     </doc-ask>
   </doc-claim>
@@ -356,7 +356,7 @@ RATES = {"cpu_core_s": 0.00003942, "mem_gib_s": 0.00000667}   # sandbox, 2026-11
 
   <doc-claim>
     <p>An instance must pass static gates on Modal before we keep it.</p>
-    <doc-mock frame="terminal" title="freedom" w="460" caption="pool-0001 goes first. One solo and one team run follow it."><template><span class="dim">$</span> collabbench gate tasks/pool/pool-0001 --pool ifm
+    <doc-mock frame="terminal" title="freedom" w="460" caption="pool-0001 goes first. One solo and one team run follow it."><template><span class="dim">$</span> collabbench gate tasks/pool/pool-0001 --pool personal
 oracle   reward <b>1.00</b>  unauthorized 0     <span class="g">✓</span>
 nop      reward <b>0.00</b>                     <span class="g">✓</span>
 probe    private gone · 8 execs in 2.3 s  <span class="g">✓</span>
@@ -380,7 +380,7 @@ ADMIT = {
     <p>Each cell runs 3 times first, and 5 times if the result is unclear.</p>
     <doc-code title="grids/pilot.yaml · sketch" lang="yaml" caption="Approximately 420 runs and $50 of sandbox time at 3 runs.">
 <script type="text/plain">
-pool: ifm
+pool: personal      # then ifm at the cap
 model: deepseek-v4-1-flash-1017
 concurrency: 16
 tracks:

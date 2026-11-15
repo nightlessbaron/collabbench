@@ -27,7 +27,9 @@ event log and the verifier's `reward.json`/`details.json`.
   profile is never changed.
 - Modal sandbox rates (one config value): $0.00003942 per core-second, $0.00000667 per GiB-second. Default sandbox
   1 core, 2048 MB.
-- Harness defaults: `budget` 400000 tokens, `context_cap` 96000 tokens, `effort` "high", budget warning at 90%,
+- Pool order: `personal` pays first; the runner moves to `ifm` when `personal` reaches its cap (user decision).
+- Harness defaults: `budget` 400000 tokens, `context_cap` None (no cap; compaction only past 1000000 tokens),
+  `effort` "high", budget warning at 90%,
   keep the last 6 turns on compaction, snapshot every 180 s, at most 24 snapshots, `evaluate` cap 12 per run, idle
   grace 60 s after agent 0 finishes, LLM retry window 600 s.
 - Sandbox paths: `/workspace` (deliverable), `/work/<agent>` (worktrees and isolated copies), `/opt/collab/private`
@@ -206,7 +208,7 @@ tasks/<track>/<instance>/     generated tasks (committed)
   tokens: int, turns: int, transcript: list[dict])`.
 - `async run_agent(spec, client, services, log, settings) -> AgentOutcome`. Per turn: deliver drained messages as one
   user message of `[from <sender>] <text>` lines; compact when the last call's `prompt_tokens` plus about
-  chars/3 of new messages exceeds `context_cap`; call the model; charge prompt + completion; emit `llm_call` (with
+  chars/3 of new messages exceeds `context_cap` (1000000 when None); call the model; charge prompt + completion; emit `llm_call` (with
   `reasoning` in the payload); on "warn" append a user message saying 10% of the budget is left; on "exhausted" run only
   a `finish` call from this response, then stop with `budget_exhausted`; three replies in a row with no tool call end
   the agent as `stopped`; the same command 5 times in a row, or the same message text 3 times, emits `loop`; check
@@ -385,7 +387,7 @@ tripwire.sh}`; test `tests/taskfmt/test_kit.py` with a toy task.
   `PYTHONPATH=<repo>/src`, `COLLAB_LLM_BASE_URL`, `COLLAB_LLM_API_KEY`; `trial_sandbox_seconds(trial_dir) ->
   tuple[float, float]` from the trial's `result.json` timings; `run_cell(cell, grid, ledger) -> list[Path]` checks the
   ledger with (runs x the mean measured cost, or $0.25 before any measurement), runs Harbor, records each trial's cost.
-- CLI: `collabbench gen pool --seeds 1-6`, `gen swarm --seeds 1-6`, `gen inspire --all`, `gate <dirs> --pool ifm`,
+- CLI: `collabbench gen pool --seeds 1-6`, `gen swarm --seeds 1-6`, `gen inspire --all`, `gate <dirs> --pool personal`,
   `run <grid.yaml>`, `metrics <runs_dir> --out <dir>`.
 
 - [ ] Tests: `test_condition_table_matches_spec` (for example Pool `solo_2B` with budget 1000 gives `team_size=1,
@@ -395,7 +397,7 @@ tripwire.sh}`; test `tests/taskfmt/test_kit.py` with a toy task.
   `test_trial_cost_matches_rates` (3600 s agent + 0 s verifier at 1 core and 2 GiB gives 0.1419 + 0.0480).
 - [ ] Implement, pass, commit `feat: budget-capped Harbor runner and CLI`.
 
-### Task 11: Gates and the end-to-end spike (live, on Modal pool `ifm`)
+### Task 11: Gates and the end-to-end spike (live, on Modal pool `personal`)
 
 **Files:** Create `runner/gates.py`; test `tests/runner/test_gates.py`; notes in
 `docs/superpowers/plans/2026-11-15-collabbench-v1-spike.md`.
@@ -451,7 +453,7 @@ synthetic trial dirs.
 
 ### Task 13: Gate all instances, calibrate, admit (live)
 
-- [ ] `collabbench gate tasks/*/* --pool ifm`. Fix or regenerate (new seed) any failure; commit.
+- [ ] `collabbench gate tasks/*/* --pool personal`. Fix or regenerate (new seed) any failure; commit.
 - [ ] Calibration grid `grids/calibrate.yaml`: per instance, one run of each admission condition (spec 9) with B =
   400000 (Swarm 300000). Adjust B per track so the admission conditions separate (for example, Swarm solo@B <= 0.7),
   then record B in `grids/pilot.yaml`.
@@ -459,7 +461,7 @@ synthetic trial dirs.
 
 ### Task 14: Pilot grid and report (live)
 
-- [ ] `collabbench run grids/pilot.yaml` with 3 runs per cell (pool `ifm` until its cap, then `personal`), then
+- [ ] `collabbench run grids/pilot.yaml` with 3 runs per cell (pool `personal` until its cap, then `ifm`), then
   `collabbench metrics runs/pilot --out results/pilot`. Expected: `profile.md` with Swarm, Pool and Inspire tables,
   intervals and n.
 - [ ] Add 2 more runs to cells whose interval straddles the comparison (1.0 for gains, the control for retention),

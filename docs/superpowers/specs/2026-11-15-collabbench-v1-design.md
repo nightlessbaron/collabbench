@@ -117,7 +117,7 @@ serves every control.
 | `facts` | `private`, `shared` | private = agent i gets role i's context only; shared = every agent gets every role's context merged (the oracle, and "one agent given every fact" when k=1) |
 | `placebo` | role name or none | replace that role's private context with its placebo file |
 | `workspace` | `shared`, `worktrees`, `isolated` | default comes from the task (section 7); `isolated` is the no-communication control |
-| `context_cap` | tokens (default 96k) | same for every agent in every condition |
+| `context_cap` | tokens or none (default none) | none = the model's full 1M window (user decision); same for every agent in every condition |
 | `effort` | low/high/max | DeepSeek reasoning effort, default high |
 
 Budget = prompt + completion tokens over all of an agent's calls, compaction calls included (the methodology matches
@@ -130,9 +130,11 @@ Each agent is an OpenAI tool-calling loop against the gateway (`tools=`, native 
 team run concurrently as asyncio tasks; their commands run concurrently in the one sandbox through Harbor's
 `environment.exec`. Reasoning text is logged but not sent back in later turns.
 
-Context policy, identical for solo and team: when the next prompt would exceed `context_cap`, the harness replaces
-everything but the system prompt, the brief and the last 6 turns with a summary the same model writes. That keeps a
-solo agent able to spend its whole k x B budget, so a team cannot win only by having fresh contexts.
+Context policy, identical for solo and team. By default there is no cap (user decision, 2026-11-15): every agent may
+use the model's full window. Compaction is only a safety net. When the next prompt would exceed `context_cap`, or
+1,000,000 tokens when the cap is none, the harness replaces everything but the system prompt, the brief and the last
+6 turns with a summary the same model writes. The budget counts prompt tokens on every call, so a long context costs
+budget at the same rate for solo and team; that is the matched-compute rule, not an asymmetry.
 
 ### 6.3 Tools
 
@@ -332,8 +334,11 @@ tasks; approach A; the three v1 tracks from the methodology.
 My calls, approved in summary on 2026-11-15:
 - The harness is fixed and the model varies (DeepSeek now).
 - Swarm subagents use the model under test.
-- Every agent, solo included, has the same 96k context cap and compaction.
-- 3 seeds per cell first, 5 where the comparison is unresolved; stop at $45.
+- 3 runs per cell first, 5 where the comparison is unresolved (kept by the user in the HTML plan).
+
+The user's answers in the HTML plan (2026-11-15): no context cap (the full 1M window, same for every agent); Swarm
+widths 2, 4 and 8; one Inspire trap instance; the `personal` Modal pool pays first, then `ifm`; 3 runs per cell, then
+5 where the interval is unclear. Execution: native (in one session), as recommended.
 
 My calls, made in this document (v1 builds 6 instances per track, inside the methodology's 5 to 8):
 - In lead topology subagents never see the brief, which is how boundaries survive delegation.
