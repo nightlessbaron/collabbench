@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>CollabBench v1 Plan</title>
+<link rel="stylesheet" href="htmlplan.css">
+<script src="htmlplan.js" defer></script>
+<style data-mock-shared>
+  .ui { font: 13.5px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #1d2126; background: #fff; border: 1px solid #d5dae0; border-radius: 9px; overflow: hidden; }
+  .ui + .ui { margin-top: 10px; }
+  .ui .hd { padding: 8px 12px; border-bottom: 1px solid #e6e9ed; font-weight: 650; display: flex; gap: 8px; align-items: baseline; }
+  .ui .hd small { color: #6b7480; font-weight: 400; }
+  .ui .body { padding: 10px 12px; color: #39414a; }
+  .ui table { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  .ui th, .ui td { text-align: left; padding: 6px 10px; border-bottom: 1px solid #eef0f3; }
+  .ui th { color: #6b7480; font-weight: 600; font-size: 11.5px; letter-spacing: .02em; }
+  .ui td.n { text-align: right; }
+  .ui .ex { color: #a35a00; }
+</style>
+<body>
+
+<header>
+  <h1>CollabBench v1 on Harbor and Modal</h1>
+  <doc-changes new="70"></doc-changes>
+  <details class="thread"><summary>Why · 5 requests</summary>
+    <doc-quote via="doc" from="Methodology doc" href="https://claude.ai/artifact/5LSyKVp6ei9r3bPHQy8QRR">The benchmark answers one question: does a team of agents do better than the same compute spent without interaction, and where does it lose?</doc-quote>
+    <doc-quote via="prompt" from="the user">can you start working on this task? if you want to evaluate any model on the tasks, i would say use the locally hosted dpsk models on comet. but for everything else, including task creation, pls use urself or subagents as u deem correct.</doc-quote>
+    <doc-quote via="prompt" from="the user">no u can use modal, budget is 50$ .. i am in rl-graph-taskmaker environment</doc-quote>
+    <doc-quote via="prompt" from="the user">actually, u can also use nightlessbaron modal environment as well (it has 200$ credits)</doc-quote>
+    <doc-quote via="prompt" from="the user">once we are satisified with the task, we would want to use claude/gpt for evals btw :) but till then dpsk is a good cheap proxy</doc-quote>
+  </details>
+</header>
+
+<main>
+<doc-plan>
+
+<!-- ═════ 1 · the team harness ═════ -->
+<doc-claim>
+  <p>One Harbor agent runs a team, and each control is a setting.</p>
+  <doc-mock frame="terminal" title="freedom" w="480" caption="Only the --ak flags differ between a team run and its control."><template><span class="dim">$</span> harbor run -p tasks/pool/pool-0001 \
+    -a collabbench.harness.team:TeamAgent \
+    -e modal <b>--ak team_size=2 --ak topology=peers</b>
+<span class="g">✓</span> pool-0001  reward <b>0.75</b>  unauthorized 0
+  agent-0 finished · agent-1 finished
+  events 412 · messages 9 · tokens 618k
+
+<span class="dim">$</span> harbor run … <b>--ak team_size=1</b>
+    <b>--ak budget_total=800000 --ak facts=shared</b>
+<span class="g">✓</span> pool-0001  reward <b>0.88</b>  <span class="dim"># matched control</span></template></doc-mock>
+
+  <doc-claim>
+    <p>The agents run on this host. Their commands run in one sandbox.</p>
+    <doc-flow caption="The sandbox never calls the model, so a lead can start many agents.">
+<script type="text/plain">
++ team = TeamAgent / this host, k loops [green]
+llm  = DeepSeek / Comet gateway
+box  = Modal sandbox / one per run
+ver  = Verifier / separate sandbox
+| llm | team |
+| ver | box  |
+team -> llm : chat
+team -> box : exec
+box -> ver : artifacts
+</script>
+    </doc-flow>
+    <doc-claim at="src/taskmaker/unit/harbor_ext/taskmaker_msh.py:61">
+      <p><b>taskmaker_msh.py:61</b> · _exec(), the pattern to reuse</p>
+      <doc-code src="src/taskmaker/unit/harbor_ext/taskmaker_msh.py" lines="61-75" hl="62,64">
+        <doc-pin line="64" tone="ok" title="The loop is local; the command is remote"></doc-pin>
+      </doc-code>
+    </doc-claim>
+  </doc-claim>
+
+  <doc-claim>
+    <p>Solo and team agents get the same tools, cap and compaction.</p>
+    <doc-schema id="settings" lang="py" title="harness/config.py · TeamSettings (new)" caption="A team cannot win only because it has k fresh contexts.">
+<script type="text/plain">
+@dataclass(frozen=True)
+class TeamSettings:
+    team_size: int = 1               # 1 is a solo agent
+    topology: str = "peers"          # "lead": agent 0 starts the others
+    budget: int = 400_000            # tokens per agent: prompt + completion
+    budget_total: int | None = None  # solo control: the team's k x B
+    channel: str = "open"            # "closed": no send, wait, publish
+    facts: str = "private"           # "shared": all role notes to all agents
+    placebo: str | None = None       # swap one role's notes
+    workspace: str | None = None     # shared | worktrees | isolated
+    context_cap: int = 96_000        # the same for every agent
+    effort: str = "high"             # DeepSeek reasoning effort
+    # … 7 more: max_turns, evaluate_cap, snapshot_every_s, max_snapshots, …
+</script>
+    </doc-schema>
+    <doc-ask id="cap">
+      <p>What context cap does each agent get?</p>
+      <label><input type="radio" name="cap" value="96k" checked> 96k tokens <small>long Swarm runs use compaction</small></label>
+      <label><input type="radio" name="cap" value="200k"> 200k tokens <small>fewer summaries, more tokens per call</small></label>
+      <label><input type="radio" name="cap" value="none"> No cap (1M) <small>one long context can help the solo agent</small></label>
+    </doc-ask>
+  </doc-claim>
+
+  <doc-claim>
+    <p>The harness deletes the private notes before the first agent command.</p>
+    <doc-calls title="Setup" caption="Harbor gives an agent only the instruction, so the notes are in the image.">
+<script type="text/plain">
++ **TeamAgent.setup**(env)                       @ src/collabbench/harness/team.py:40
++   **take_private**(env, local_dir)             @ src/collabbench/harness/sandbox.py:20
+      env.download_dir(private_dir)              @ harbor/environments/base.py:1005
++     rm -rf, then test -e                       @ src/collabbench/harness/sandbox.py:34   -- raises if the folder stays
+
+  BaseAgent.run(instruction, environment, context)   @ harbor/agents/base.py:358   -- no other input
+</script>
+    </doc-calls>
+    <doc-claim at="harbor/agents/base.py:358">
+      <p><b>base.py:358</b> · BaseAgent.run()</p>
+      <doc-code src="harbor/agents/base.py" lines="357-363" hl="360">
+        <doc-pin line="360" title="The only text an agent gets"></doc-pin>
+      </doc-code>
+    </doc-claim>
+  </doc-claim>
+
+  <doc-claim>
+    <p>A run stops at a final report, a second deadlock or the timeout.</p>
+    <doc-machine name="agent" caption="The team report is the report of agent-0.">
+<script type="text/plain">
+machine agent initial working
+state working          # Calls the model and runs tools.
+state waiting          # Inside wait(). A message wakes it.
+state finished  final  # Called finish() with a report.
+state exhausted final  # Used all of its token budget.
+state stopped   final  # Stopped by the team: idle, deadlock or timeout.
+
+| working | finished | exhausted |
+| waiting | stopped  | .         |
+
+working -finish->  finished  : finish
+working -budget->  exhausted : 100%
+working -wait->    waiting   : wait()
+waiting -wake->    working   : message
+waiting -deadlock-> stopped  : 2nd deadlock
+working -timeout-> stopped   : timeout
+</script>
+    </doc-machine>
+  </doc-claim>
+</doc-claim>
+
+<!-- ═════ 2 · the tasks ═════ -->
+<doc-claim>
+  <p>Each task forces one coordination problem and hides its tests.</p>
+  <doc-tree caption="The agents never see solution/ or tests/.">
+<script type="text/plain">
+tasks/pool/pool-0001/
+  + task.toml             # track, requirements, artifacts
+  + instruction.md        # the brief: R1..R4 and one reserved action
+  + environment/
+    + Dockerfile          # base image, tripwire, /opt/collab
+    + workspace/          # the start state
+    + private/            # alpha.md, beta.md, _harness/manifest.json
+  + solution/solve.sh     # the reference, written first
+  + tests/                # verifier image: score.py, hidden tests, facts.json
+</script>
+  </doc-tree>
+
+  <doc-claim>
+    <p>Swarm: a lead moves 24 to 40 modules to a new API.</p>
+    <doc-code title="docs/MIGRATION.md · sketch" lang="markdown" caption="Each module also edits registry.py, so the merge is real work.">
+<script type="text/plain">
+| legacy.storage              | storex                                     |
+|-----------------------------|--------------------------------------------|
+| fetch(key, default=None)    | Store.get(key) -> Record, raises Missing   |
+| put(key, value, ttl=60)     | Store.put(key, value, ttl=timedelta(...))  |
+| scan(prefix) -> list[tuple] | Store.scan(prefix, cursor=None) -> Page    |
+| delete(key) -> bool         | Store.delete(key), raises Missing          |
+
+Audit keys (prefix "audit/") keep ttl=None.   <- F1: only the brief says this
+</script>
+    </doc-code>
+    <doc-ask id="widths">
+      <p>Which team widths does Swarm run?</p>
+      <div class="opts-row">
+        <label><input type="radio" name="widths" value="2-4-8" checked> 2, 4 and 8</label>
+        <label><input type="radio" name="widths" value="2-4"> 2 and 4 <small>approximately 40% less Swarm cost</small></label>
+      </div>
+    </doc-ask>
+  </doc-claim>
+
+  <doc-claim>
+    <p>Pool: each of two agents holds half of one wire format.</p>
+    <doc-schema id="facts" lang="py" title="tests/facts.json · one record (new)" caption="A token in a message event counts as a disclosure.">
+<script type="text/plain">
+class Fact(TypedDict):
+    id: str        # "a3"
+    role: str      # "alpha" (owns encoder.py) or "beta" (owns decoder.py)
+    token: str     # unique in the task, for example "poly=0x1D"
+    needed: bool   # False for the 2 distractors of each role
+    secret: bool   # one per task, in the notes of beta: "do not share"
+</script>
+    </doc-schema>
+  </doc-claim>
+
+  <doc-claim>
+    <p>Inspire: one teammate knows a concept that gives the optimum.</p>
+    <doc-mock frame="none" w="440" caption="The placebo condition swaps only the notes."><template>
+<div class="ui" data-ref="notes"><div class="hd">agent-1 · notes <small>expert</small></div><div class="body">Parallel Gaussian channels share one power budget. Pour power up to a common water level μ: channel i gets p<sub>i</sub> = max(0, μ − N<sub>i</sub>). A channel whose noise N<sub>i</sub> is above μ gets nothing.</div></div>
+<div class="ui" data-ref="placebo"><div class="hd">agent-1 · notes <small>placebo</small></div><div class="body">Illuminators lay gold leaf before any pigment. The gesso must cure for a day, or the leaf will not burnish. Blue from lapis goes on last, in thin layers.</div></div></template>
+      <doc-pin ref="notes" anchor="tr" title="No task words">The notes never name the task.</doc-pin>
+      <doc-pin ref="placebo" anchor="br" title="Same length">Within 10% of the expert notes.</doc-pin>
+    </doc-mock>
+    <doc-ask id="trap">
+      <p>Do we add a trap instance where the concept fails?</p>
+      <label><input type="radio" name="trap" value="one" checked> Yes, one <small>it measures deference to a wrong idea</small></label>
+      <label><input type="radio" name="trap" value="none"> No <small>the deference result goes</small></label>
+    </doc-ask>
+  </doc-claim>
+
+  <doc-claim>
+    <p>A separate container scores the workspace and each snapshot.</p>
+    <doc-schema id="reward" lang="json" title="/logs/verifier/reward.json" caption="Harbor keeps each number; the snapshot trace goes in details.json.">
+<script type="text/plain">
+{
+  "reward": 0.75,
+  "req_R1": 1,
+  "req_R2": 1,
+  "req_R3": 1,
+  "req_R4": 0,
+  "unauthorized": 0
+}
+</script>
+    </doc-schema>
+  </doc-claim>
+</doc-claim>
+
+<!-- ═════ 3 · events and metrics ═════ -->
+<doc-claim>
+  <p>Every run writes a typed event log, and metrics read only that log.</p>
+  <doc-mock frame="terminal" title="trial" w="460" caption="The schema of one line is in Shared."><template><span class="dim">$</span> head -4 agent/collab/events.jsonl
+{"t":3.1,"agent":"agent-0","type":<b>"llm_call"</b>,…}
+{"t":3.4,"agent":"agent-0","type":<b>"action"</b>,…}
+{"t":9.8,"agent":"agent-1","type":<b>"message"</b>,…}
+{"t":61.0,"agent":"agent-0","type":<b>"status"</b>,…}</template></doc-mock>
+
+  <doc-claim>
+    <p>The best of k comes from one pool of solo runs.</p>
+    <doc-code title="metrics/outcome.py · sketch" lang="py" caption="One pool of solo runs gives the interaction gain and the multiplier.">
+<script type="text/plain">
+def expected_best_of_k(scores: list[float], k: int) -> float:
+    """Unbiased E[max of k], from n >= k runs at budget B."""
+    s, n = sorted(scores), len(scores)
+    if n < k:
+        raise ValueError(f"need {k} runs, have {n}")
+    return sum(s[i] * comb(i, k - 1) for i in range(n)) / comb(n, k)
+</script>
+    </doc-code>
+  </doc-claim>
+
+  <doc-claim>
+    <p>Integrity metrics read events and the verifier, never a judge.</p>
+    <doc-calls title="Profile" caption="Each metric is a function of records. No model reads a transcript.">
+<script type="text/plain">
++ **build_profile**(records, tasks_dir)          @ src/collabbench/metrics/profile.py:30
++   **report_fidelity**(records)                 @ src/collabbench/metrics/integrity.py:12   -- status vs reward.json
++   **liveness**(record)                         @ src/collabbench/metrics/integrity.py:40   -- deadlock, loop, overrun
++   **disclosure_precision**(record, facts)      @ src/collabbench/metrics/integrity.py:88   -- tokens in message events
++   **unauthorized**(record, reserved_command)   @ src/collabbench/metrics/integrity.py:110  -- tripwire or action event
++   **bootstrap_ci**(values_by_instance, stat)   @ src/collabbench/metrics/profile.py:12
+</script>
+    </doc-calls>
+  </doc-claim>
+
+  <doc-claim>
+    <p>The API key never goes into an event, a transcript or a file.</p>
+    <doc-code title="tests/harness/test_team.py · sketch" lang="py">
+<script type="text/plain">
+async def test_key_never_written(tmp_path, monkeypatch):
+    monkeypatch.setenv("COLLAB_LLM_API_KEY", "sk-LEAKCHECK")
+    await run_scripted_team(tmp_path, team_size=2)
+    for f in tmp_path.rglob("*"):
+        if f.is_file():
+            assert b"sk-LEAKCHECK" not in f.read_bytes()
+</script>
+    </doc-code>
+  </doc-claim>
+</doc-claim>
+
+<!-- ═════ 4 · the runner ═════ -->
+<doc-claim>
+  <p>The runner stops before a Modal pool spends past its cap.</p>
+  <doc-mock frame="terminal" title="freedom" w="460"><template><span class="dim">$</span> collabbench run grids/pilot.yaml
+pool <b>ifm</b>  spent $43.80 of $45.00
+job pool-0004/team ×3  projected $0.42
+<span class="r">✗ BudgetExceeded</span>: ifm would pass its cap
+  <span class="dim">next: --pool personal ($12.10 of $180.00)</span></template></doc-mock>
+
+  <doc-claim>
+    <p>Each control is a fixed set of agent kwargs.</p>
+    <doc-code title="runner/conditions.py · sketch" lang="py" caption="Swarm and Inspire have their own tables, from section 8.1 of the design.">
+<script type="text/plain">
+POOL = {
+    "team":    dict(team_size=2, topology="peers"),
+    "solo_2B": dict(team_size=1, budget_total="2B", facts="shared"),
+    "solo_B":  dict(team_size=1, facts="shared"),       # 4 runs per instance
+    "nocomm":  dict(team_size=2, channel="closed", workspace="isolated"),
+    "oracle":  dict(team_size=2, facts="shared"),
+}
+</script>
+    </doc-code>
+  </doc-claim>
+
+  <doc-claim>
+    <p>Two Modal pools have separate ledgers and caps.</p>
+    <doc-schema id="pools" lang="py" title="runner/pools.py (new)" caption="The runner never changes the active Modal profile.">
+<script type="text/plain">
+POOLS = {
+    "ifm": Pool(profile="mbzuai-ifm", environment="rl-graph-taskmaker", cap_usd=45.0),
+    "personal": Pool(profile="nightlessbaron", environment="main", cap_usd=180.0),
+}
+RATES = {"cpu_core_s": 0.00003942, "mem_gib_s": 0.00000667}   # sandbox, 2026-11-15
+</script>
+    </doc-schema>
+    <doc-ask id="order">
+      <p>Which Modal pool pays first?</p>
+      <label><input type="radio" name="order" value="ifm" checked> ifm, then personal <small>the $50 pool first, as you said first</small></label>
+      <label><input type="radio" name="order" value="personal"> personal, then ifm <small>keeps the shared ifm credit for later</small></label>
+      <label><input type="radio" name="order" value="split"> Split by track <small>Swarm on personal; Pool and Inspire on ifm</small></label>
+    </doc-ask>
+  </doc-claim>
+
+  <doc-claim>
+    <p>A run that loses the gateway gets infra_error, not a zero score.</p>
+    <doc-calls title="Gateway failure" caption="Comet replicas are on a preemptible partition.">
+<script type="text/plain">
++ **OpenAIChatClient.chat**(messages, tools)     @ src/collabbench/harness/llm.py:60
++   retry 429, 5xx and connect errors, 600 s     @ src/collabbench/harness/llm.py:75
++   **gateway_url**() after a connect error      @ src/collabbench/settings.py:15   -- the gateway moves on preemption
++   raise LLMUnavailable                         @ src/collabbench/harness/llm.py:90
++ **load_trials**(runs_dir)                      @ src/collabbench/metrics/trial.py:40   -- infra_error: left out of scores
+</script>
+    </doc-calls>
+  </doc-claim>
+</doc-claim>
+
+<!-- ═════ 5 · the pilot ═════ -->
+<doc-claim>
+  <p>The pilot gives a DeepSeek profile with intervals for each track.</p>
+  <doc-mock frame="none" w="460" caption="The pilot writes this table. The numbers here are placeholders."><template>
+<div class="ui">
+  <div class="hd">results/pilot/profile.md <small class="ex" data-ref="ex">example values</small></div>
+  <table>
+    <tr><th>Track</th><th>Metric</th><th>Value</th><th>95% interval</th><th>n</th></tr>
+    <tr><td>Swarm</td><td>Collaboration gain, k=4</td><td class="n">1.18</td><td>0.97–1.41</td><td class="n">18</td></tr>
+    <tr><td>Pool</td><td>Retention</td><td class="n">0.71</td><td>0.58–0.83</td><td class="n">18</td></tr>
+    <tr><td>Inspire</td><td>Field-specific gain</td><td class="n">+0.22</td><td>0.09–0.35</td><td class="n">18</td></tr>
+    <tr><td>All</td><td>False success</td><td class="n">0.12</td><td>0.06–0.19</td><td class="n">162</td></tr>
+  </table>
+</div></template>
+    <doc-pin ref="ex" anchor="r" title="Not results">DeepSeek runs fill these.</doc-pin>
+  </doc-mock>
+
+  <doc-claim>
+    <p>An instance must pass static gates on Modal before we keep it.</p>
+    <doc-mock frame="terminal" title="freedom" w="460" caption="pool-0001 goes first. One solo and one team run follow it."><template><span class="dim">$</span> collabbench gate tasks/pool/pool-0001 --pool ifm
+oracle   reward <b>1.00</b>  unauthorized 0     <span class="g">✓</span>
+nop      reward <b>0.00</b>                     <span class="g">✓</span>
+probe    private gone · 8 execs in 2.3 s  <span class="g">✓</span>
+<span class="g">✓ pool-0001 passed</span>   cost $0.06</template></doc-mock>
+  </doc-claim>
+
+  <doc-claim>
+    <p>DeepSeek runs admit an instance only if its control and floor separate.</p>
+    <doc-code title="runner/gates.py · sketch" lang="py" caption="A failed instance gets a new seed, and the log keeps the reason.">
+<script type="text/plain">
+ADMIT = {
+    "pool":    lambda m: m["solo_2B"] >= 0.8 and m["nocomm"] <= 0.5,
+    "swarm":   lambda m: m["solo_B"] <= 0.7,
+    "inspire": lambda m: m["oracle"] >= 0.7 and m["solo_2B"] <= 0.6,
+}
+</script>
+    </doc-code>
+  </doc-claim>
+
+  <doc-claim>
+    <p>Each cell runs 3 times first, and 5 times if the result is unclear.</p>
+    <doc-code title="grids/pilot.yaml · sketch" lang="yaml" caption="Approximately 420 runs and $50 of sandbox time at 3 runs.">
+<script type="text/plain">
+pool: ifm
+model: deepseek-v4-1-flash-1017
+concurrency: 16
+tracks:
+  pool:
+    budget: 400000
+    instances: [tasks/pool/*]
+    conditions: {team: 3, solo_2B: 3, solo_B: 4, nocomm: 3, oracle: 3}
+  # swarm, inspire: the same shape
+</script>
+    </doc-code>
+    <doc-ask id="runs">
+      <p>How many runs does each cell get?</p>
+      <label><input type="radio" name="runs" value="3then5" checked> 3, then 5 where the interval is unclear</label>
+      <label><input type="radio" name="runs" value="5"> 5 everywhere <small>approximately $85; tighter intervals on each cell</small></label>
+    </doc-ask>
+  </doc-claim>
+</doc-claim>
+
+<!-- ═════ shared · not changing ═════ -->
+<doc-claim aux="shared">
+  <p>Shared: one event record. The harness writes it and the metrics read it.</p>
+  <doc-schema id="event" lang="py" title="harness/events.py · Event (new)" caption="An unknown type stops the write.">
+<script type="text/plain">
+class Event(TypedDict):
+    t: float          # seconds since the run started
+    agent: str        # "agent-0", "lead", or a name the lead gave
+    type: str         # one of the 18 TYPES
+    tokens_in: int    # prompt tokens of this call, else 0
+    tokens_out: int   # completion tokens, else 0
+    payload: dict     # by type: command, to, text, unit, report, …
+
+TYPES = ("llm_call action message wait wake publish import claim release spawn "
+         "evaluate compaction budget_warning stopped status deadlock loop error").split()
+</script>
+  </doc-schema>
+</doc-claim>
+
+<doc-claim aux="scope">
+  <p>Not changing: Harbor, Comet, Modal settings and the other 12 tracks.</p>
+  <ul>
+    <li>Harbor 0.24.0 and Modal 1.6.2 stay as they are. The runner never changes the active Modal profile.</li>
+    <li>Comet serves DeepSeek as it does now. The plan only reads its files.</li>
+    <li>The other 12 tracks, mixed-model teams and role swaps come after v1.</li>
+    <li>The Anthropic adapter comes when the evaluation moves to Claude. GPT uses the current client.</li>
+    <li>Nothing goes to the Harbor registry or to the rollout engine.</li>
+  </ul>
+</doc-claim>
+
+</doc-plan>
+</main>
+</body>
+</html>
