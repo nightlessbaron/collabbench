@@ -26,9 +26,9 @@ Goals
 Non-goals (v1)
 - The other 12 tracks. The harness and task format must not preclude them, but nothing is built for them.
 - Ranking several models or several harnesses. DeepSeek is the cheap proxy while the tasks are tuned (user rule).
-  Once the tasks are settled, the user will evaluate Claude and GPT models, so v1 must make that a configuration
-  change: the harness's model client is provider-neutral (OpenAI-compatible chat completions now; an Anthropic
-  Messages adapter behind the same interface), and every run records tokens and, for paid APIs, dollars.
+  Once the tasks are settled, the user will evaluate Claude and GPT models, so v1 keeps the seam: the harness's
+  model client is one interface (OpenAI-compatible chat completions now, which already covers GPT; an Anthropic
+  Messages adapter is added behind it when evaluation moves to Claude), and every run records tokens.
 - Mixed-model teams, role swaps, crossover-budget sweeps, effective team size, useful share (eta) and the speedup
   decomposition. Logs are kept rich enough to add them later.
 - Publishing to the Harbor registry or the LLM360 rollout engine.
@@ -114,7 +114,7 @@ serves every control.
 | `budget` B | tokens | per-agent budget; a solo agent run as a control gets `budget_total` |
 | `budget_total` | tokens | defaults to k x B; the solo matched-budget control sets k=1 and this to the team's k x B |
 | `channel` | `open`, `closed` | closed removes the message, publish and wait tools |
-| `facts` | `private`, `shared` | shared = every agent gets every role's private context (oracle); with k=1, `private` already means "all roles merged" |
+| `facts` | `private`, `shared` | private = agent i gets role i's context only; shared = every agent gets every role's context merged (the oracle, and "one agent given every fact" when k=1) |
 | `placebo` | role name or none | replace that role's private context with its placebo file |
 | `workspace` | `shared`, `worktrees`, `isolated` | default comes from the task (section 7); `isolated` is the no-communication control |
 | `context_cap` | tokens (default 96k) | same for every agent in every condition |
@@ -182,9 +182,11 @@ score trace for overrun and time-to-score without extra sandboxes.
 
 The agent receives only the instruction, so each role's private context is baked into the image at
 `/opt/collab/private/<role>.md` (plus `<role>.placebo.md` where the track has placebos and `_harness/` for
-harness-only data such as Inspire's simulator parameters). In `setup`, the harness reads that directory with
-`download_dir` and deletes it from the sandbox before any agent runs. Roles map to agents in order: role 0 to agent 0,
-and so on; a task declares its roles in `task.toml` metadata.
+harness-only data). `_harness/manifest.json` tells the harness what it cannot learn from the instruction: the roles
+in order, the default workspace mode, file owners for the isolated mode, the reserved command, and Inspire's training
+simulator parameters. In `setup`, the harness reads that directory with `download_dir` and deletes it from the sandbox
+before any agent runs. Roles map to agents in order: role 0 to agent 0, and so on. Agents are named neutrally
+(`agent-0`, `agent-1`; in lead topology `lead` and the names it gives), never by role.
 
 ## 7. Task format and tracks
 
@@ -262,8 +264,8 @@ re-skin). Every instance must pass the static gates (section 9) before it is com
 | Track | Team run | Matched-budget control | Independent best-of-k | No communication | Oracle | Track control |
 |---|---|---|---|---|---|---|
 | Swarm | lead, k in {2,4,8}, worktrees | solo, budget k x B | from the solo@B pool | n/a (delegation is communication) | n/a | = matched budget |
-| Pool | peers, k=2, shared | solo, 2B (all facts merged) | from the solo@B pool | k=2, channel closed, isolated | k=2, facts shared | = matched budget |
-| Inspire | peers, k=2, expert notes | solo, 2B, no notes | from the solo@B pool | k=2, channel closed | solo, 2B, notes given | k=2 with placebo notes |
+| Pool | peers, k=2, shared | solo, 2B, facts shared | from the solo@B pool (facts shared) | k=2, channel closed, isolated | k=2, facts shared | = matched budget |
+| Inspire | peers, k=2, expert notes | solo, 2B, facts private (the solver has no notes) | from the solo@B pool (no notes) | k=2, channel closed | solo, 2B, facts shared | k=2 with placebo notes |
 
 Independent best-of-k is never run as its own condition: the expected best of k is estimated without bias from a pool
 of n >= k solo runs at budget B, per instance (n = 8 for Swarm, whose largest k is 8; n = 4 for Pool and Inspire).
