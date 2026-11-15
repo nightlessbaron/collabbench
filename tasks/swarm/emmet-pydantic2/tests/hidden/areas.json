@@ -32,15 +32,10 @@
   ]
  },
  "R6": {
-  "name": "API molecules",
+  "name": "API molecules and core",
   "prefixes": [
    "emmet-api.tests.molecules.",
-   "emmet-api.tests.legacy."
-  ]
- },
- "R7": {
-  "name": "API core",
-  "prefixes": [
+   "emmet-api.tests.legacy.",
    "emmet-api.tests.core.",
    "emmet-api.tests._consumer.",
    "emmet-api.tests._general_store.",

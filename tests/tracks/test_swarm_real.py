@@ -297,3 +297,17 @@ def test_emmet_checkout_found_from_the_current_directory(tmp_path):
                                                        ("emmet-core", "emmet-builders", "emmet-api")]
     out = subprocess.run(["python3", "-I", "-c", probe], cwd=tmp_path, capture_output=True, text=True, check=True)
     assert "/workspace/emmet-core" in out.stdout.splitlines()
+
+
+def test_emmet_verifier_finds_test_data_and_openbabel(tmp_path):
+    """The scored workspace has no test_files link (Harbor and the grader drop links that leave the tree), so the
+    hidden conftest points MAPISettings at the image's copy. Upstream CI installed openbabel (conda); so do the images."""
+    task = TASKS / "emmet-pydantic2"
+    conftest = task / "tests" / "hidden" / "conftest.py"
+    probe = (f"import os, runpy; os.environ.pop('MAPI_TEST_FILES', None); runpy.run_path({str(conftest)!r}); "
+             f"print(os.environ['MAPI_TEST_FILES'])")
+    out = subprocess.run(["python3", "-I", "-c", probe], capture_output=True, text=True, check=True,
+                         env={"COLLAB_WORKSPACE": str(tmp_path), "PATH": "/usr/bin:/bin"})
+    assert out.stdout.strip() == str(task / "tests" / "hidden" / "test_files")
+    for dockerfile in (task / "environment" / "Dockerfile", task / "tests" / "Dockerfile"):
+        assert re.search(r"\bopenbabel-wheel==3\.1\.1\.\d+", dockerfile.read_text())

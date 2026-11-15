@@ -10,20 +10,25 @@ import json
 from pathlib import Path
 
 
-def gate_tests(run_dir: Path) -> dict[str, bool]:
-    """`final.tests` of the single verifier details.json under a gate job or trial directory."""
+def gate_tests(run_dir: Path, allow_empty: bool = False) -> dict[str, bool]:
+    """Every collected test ({key: passed}) of the single verifier details.json under a gate job or trial directory:
+    `final.collected` (any run), else `final.tests` (a harvest run). A start run may collect nothing, when every test
+    module fails to import; a scoring error is never read as "nothing passes"."""
     found = sorted(Path(run_dir).rglob("verifier/details.json"))
     if len(found) != 1:
         raise ValueError(f"expected exactly one verifier/details.json under {run_dir}, found {len(found)}")
-    tests = json.loads(found[0].read_text())["final"].get("tests") or {}
-    if not tests:
+    final = json.loads(found[0].read_text())["final"]
+    if final.get("error"):
+        raise ValueError(f"{found[0]} records a scoring error: {str(final['error'])[:200]}")
+    tests = final.get("collected") or final.get("tests") or {}
+    if not tests and not allow_empty:
         raise ValueError(f"{found[0]} lists no tests: was the task in harvest mode (expected_tests 'collect')?")
     return tests
 
 
 def pin_tests(task_dir: Path, oracle_run: Path, nop_run: Path | None = None) -> dict:
     ref = gate_tests(oracle_run)
-    start = gate_tests(nop_run) if nop_run else {}
+    start = gate_tests(nop_run, allow_empty=True) if nop_run else {}
     passed = {name for name, ok in ref.items() if ok}
     pinned = sorted(name for name in passed if not start.get(name, False))
     (Path(task_dir) / "tests" / "hidden" / "expected_tests.json").write_text(json.dumps(pinned, indent=1))

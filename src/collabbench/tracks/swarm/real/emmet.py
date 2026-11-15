@@ -61,16 +61,21 @@ def pinned_packages(migration: Migration) -> list[str]:
         m = re.match(r"^([A-Za-z0-9_.\-]+)(\[[^\]]*\])?==(\S+)", line)
         if m and not EXCLUDE.match(m.group(1).lower()):
             out.append(f"{m.group(1)}=={m.group(3)}")
-    return out + ["setuptools==68.2.2"]
+    # Upstream CI installed openbabel from conda for the molecule documents and builders; this is its PyPI build.
+    return out + ["setuptools==68.2.2", "openbabel-wheel==3.1.1.17"]
 
 
 HIDDEN_CONFTEST = '''"""Written by the CollabBench builder into tests/hidden/ (emmet). Pytest runs isolated (python -I), so the workspace's
 three emmet packages are on sys.path only through this file, appended: workspace files can never replace stdlib or
-pytest modules. `emmet` is a namespace package spread over the three directories."""
+pytest modules. `emmet` is a namespace package spread over the three directories.
+
+MAPISettings looks for test data in the workspace's test_files/, a link that the scored copy of the workspace does not
+keep; MAPI_TEST_FILES points it at the image's copy next to this file."""
 
 import os
 import sys
 
+os.environ.setdefault("MAPI_TEST_FILES", os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_files"))
 _ws = os.environ.get("COLLAB_WORKSPACE")
 if _ws:
     for _pkg in ("emmet-core", "emmet-builders", "emmet-api"):
@@ -149,13 +154,12 @@ AREAS = [
          "emmet-builders' builders run on pydantic 2 documents with maggma stores; covered by emmet-builders/tests"),
     Area("R5", "API materials", ["emmet-api.tests.materials."],
          "emmet-api's materials resources and query operators; covered by emmet-api/tests/materials"),
-    Area("R6", "API molecules", ["emmet-api.tests.molecules.", "emmet-api.tests.legacy."],
-         "emmet-api's molecules (and legacy molecules) resources and query operators; covered by "
-         "emmet-api/tests/molecules and legacy"),
-    Area("R7", "API core", ["emmet-api.tests.core.", "emmet-api.tests._consumer.", "emmet-api.tests._general_store.",
-                            "emmet-api.tests.test_"],
-         "emmet-api's settings, core utilities, consumer and general-store resources; covered by the rest of "
-         "emmet-api/tests"),
+    # One area for the API's molecules and core: after fail-to-pass pinning the core alone keeps a single test.
+    Area("R6", "API molecules and core", ["emmet-api.tests.molecules.", "emmet-api.tests.legacy.",
+                                          "emmet-api.tests.core.", "emmet-api.tests._consumer.",
+                                          "emmet-api.tests._general_store.", "emmet-api.tests.test_"],
+         "emmet-api's molecules (and legacy molecules) resources and query operators, and its core: the MAPI app, "
+         "settings, consumer and general-store resources; covered by emmet-api/tests outside materials/"),
 ]
 
 BRIEF = """# Port emmet to pydantic 2

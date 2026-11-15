@@ -8,7 +8,9 @@ Keys: `key="name"` keys a test by its function name (synthetic tracks); `key="no
 (upstream suites repeat test names across files). `targets` (paths under hidden/) run as separate pytest processes, for
 suites whose packages share a top-level name (several `tests` packages). hidden/expected_tests.json pins the test list:
 a pinned test missing from the report counts as failed. The marker "collect" pins nothing (harvest mode: the run
-reports every test it collected, for `collabbench pin-tests`).
+reports every test it collected, for `collabbench pin-tests`). Every run also returns `collected` (each reported test,
+pinned or not, so a re-gate can be re-pinned) and `failures` (a short reason per failed test); the grader keeps both in
+details.json.
 """
 
 import json
@@ -24,8 +26,9 @@ HIDDEN = Path(__file__).resolve().parent / "hidden"
 _REQ = re.compile(r"test_([A-Z]+\d+)_")
 
 
-def _run_one(workspace: Path, hidden: Path, target: Path, timeout_s: int, args, key: str) -> dict | None:
-    """{test key: passed} for one pytest process, or None when the run did not produce a scoring."""
+def _run_one(workspace: Path, hidden: Path, target: Path, timeout_s: int, args, key: str) -> tuple | None:
+    """({test key: passed}, {failed test key: short reason}) for one pytest process, or None when the run did not
+    produce a scoring."""
     with tempfile.TemporaryDirectory() as tmp:
         junit = Path(tmp) / "junit.xml"
         # -I: no PYTHONPATH, no cwd on sys.path, no user site. hidden/conftest.py appends the workspace to sys.path.
@@ -38,26 +41,31 @@ def _run_one(workspace: Path, hidden: Path, target: Path, timeout_s: int, args, 
             return None
         if run.returncode not in (0, 1) or not junit.exists():  # 0 all passed, 1 some failed; else not a scoring
             return None
-        results = {}
+        results, failures = {}, {}
         for case in ET.parse(junit).getroot().iter("testcase"):
             if any(c.tag == "error" and c.get("message") == "collection failure" for c in case):
                 continue  # a module that failed to import: its tests are missing, and count as failed if pinned
-            failed = any(child.tag in ("failure", "error", "skipped") for child in case)
+            bad = [child for child in case if child.tag in ("failure", "error", "skipped")]
             name = case.get("name", "")
-            results[f"{case.get('classname', '')}::{name}" if key == "nodeid" else name] = not failed
-        return results
+            name = f"{case.get('classname', '')}::{name}" if key == "nodeid" else name
+            results[name] = not bad
+            if bad:
+                failures[name] = f"{bad[0].tag}: {bad[0].get('message') or (bad[0].text or '').strip()}"[:300]
+        return results, failures
 
 
 def run_pytest(workspace: Path, hidden: Path = HIDDEN, timeout_s: int = 600, *, key: str = "name",
                targets: list[str] | None = None, args: list[str] = (), areas: dict | None = None) -> dict:
     workspace, hidden = Path(workspace).resolve(), Path(hidden)
-    results, broken = {}, 0
+    results, failures, broken = {}, {}, 0
     for target in targets or [None]:
         got = _run_one(workspace, hidden, hidden / target if target else hidden, timeout_s, list(args), key)
         if got is None:
             broken += 1
         else:
-            results.update(got)
+            results.update(got[0])
+            failures.update(got[1])
+    collected = dict(results)  # every test the run reported, pinned or not (for re-pinning after a re-gate)
     extras = {}
     if broken:
         extras["collection_error"] = 1.0
@@ -78,4 +86,4 @@ def run_pytest(workspace: Path, hidden: Path = HIDDEN, timeout_s: int = 600, *, 
             requirements[req] = requirements.get(req, True) and ok
     return {"reward": sum(results.values()) / len(results), "requirements": requirements,
             "extras": {**extras, "tests_passed": float(sum(results.values())), "tests_total": float(len(results))},
-            "tests": results}
+            "tests": results, "collected": collected, "failures": failures}

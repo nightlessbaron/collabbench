@@ -341,3 +341,35 @@ def test_grade_skips_snapshot_links_that_leave_the_snapshot(tmp_path):
                     "--tripwire", str(trip), "--out", str(out)], check=True)
     [row] = json.loads((out / "details.json").read_text())["trace"]
     assert row["reward"] == 1.0 and "error" not in row
+
+
+def test_pinned_runs_still_report_every_collected_test_and_why_tests_fail(tmp_path):
+    """details.json keeps every collected test (`collected`) next to the pinned ones (`tests`), so a re-gate can be
+    re-pinned, and a short reason per failed test (`failures`), so reference failures can be diagnosed."""
+    d = write_task(nodeid_spec(), tmp_path)
+    (d / "tests" / "hidden" / "expected_tests.json").write_text(json.dumps(["pkg_a.tests.test_calc::test_add"]))
+    start = score_locally(d, "start")
+    assert list(start["tests"]) == ["pkg_a.tests.test_calc::test_add"]
+    assert len(start["collected"]) == 5 and sum(start["collected"].values()) == 3
+    assert set(start["failures"]) == {"pkg_a.tests.test_calc::test_add", "pkg_b.tests.test_calc::test_add"}
+    assert "assert 0 == 5" in start["failures"]["pkg_a.tests.test_calc::test_add"]
+    assert all(len(reason) <= 300 for reason in start["failures"].values())
+
+
+def test_pin_prefers_collected_and_accepts_an_empty_start(tmp_path):
+    from collabbench.taskfmt.pin import pin_tests
+    d = write_task(nodeid_spec(expected_tests="collect"), tmp_path / "t")
+    oracle = _fake_trial(tmp_path / "o", {"a::t1": True})
+    details = next(oracle.rglob("details.json"))
+    data = json.loads(details.read_text())
+    data["final"]["collected"] = {"a::t1": True, "a::t2": True, "a::t3": False}
+    details.write_text(json.dumps(data))
+    nop = _fake_trial(tmp_path / "n", {})  # the start collected nothing: every module failed to import
+    assert pin_tests(d, oracle, nop) == {"collected": 3, "pinned": 2, "failed_on_reference": 1, "passed_on_start": 0}
+    broken = _fake_trial(tmp_path / "b", {})
+    details = next(broken.rglob("details.json"))
+    details.write_text(json.dumps({"final": {"reward": 0.0, "tests": {}, "error": "Timeout"}, "trace": []}))
+    with pytest.raises(ValueError, match="scoring error"):
+        pin_tests(d, oracle, broken)
+    with pytest.raises(ValueError, match="lists no tests"):
+        pin_tests(d, nop)

@@ -6,7 +6,7 @@ name = "collabbench/emmet-pydantic2"
 
 [metadata.collab]
 track = "swarm"
-requirements = ["R1", "R2", "R3", "R4", "R5", "R6", "R7", "F1", "F2", "F3"]
+requirements = ["R1", "R2", "R3", "R4", "R5", "R6", "F1", "F2", "F3"]
 reserved_script = "scripts/release.sh"
 upstream = "https://github.com/materialsproject/emmet.git"
 parent = "699ec1da63e4910c64af83206811732d3376b6da"

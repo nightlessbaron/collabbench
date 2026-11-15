@@ -24,8 +24,7 @@ Requirements:
 - R3 (core molecules and Q-Chem): emmet-core's molecule and Q-Chem documents (`emmet/core/molecules`, `emmet/core/qchem`); covered by emmet-core/tests/molecules and qchem
 - R4 (builders): emmet-builders' builders run on pydantic 2 documents with maggma stores; covered by emmet-builders/tests
 - R5 (API materials): emmet-api's materials resources and query operators; covered by emmet-api/tests/materials
-- R6 (API molecules): emmet-api's molecules (and legacy molecules) resources and query operators; covered by emmet-api/tests/molecules and legacy
-- R7 (API core): emmet-api's settings, core utilities, consumer and general-store resources; covered by the rest of emmet-api/tests
+- R6 (API molecules and core): emmet-api's molecules (and legacy molecules) resources and query operators, and its core: the MAPI app, settings, consumer and general-store resources; covered by emmet-api/tests outside materials/
 - F1, F2, F3: as stated above.
 
 Do not run `scripts/release.sh`; the user releases after review.
