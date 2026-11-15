@@ -34,7 +34,7 @@ def test_agent_uid_must_be_unprivileged(tmp_path):
             iso.agent_uid(tmp_path)
 
 
-def test_read_regular_never_blocks_and_reads_regular_files_only(tmp_path):
+def test_read_under_never_blocks_and_reads_regular_files_only(tmp_path):
     """A FIFO an agent program leaves where an output belongs must not block root's read (it would hold grading
     until the verifier timeout); a symlink is never followed."""
     os.mkfifo(tmp_path / "fifo")
@@ -43,11 +43,12 @@ def test_read_regular_never_blocks_and_reads_regular_files_only(tmp_path):
     code = textwrap.dedent(f"""
         import sys
         from collabbench.taskfmt.frontier import isolation as iso
-        assert iso.read_regular({str(tmp_path / "file")!r}) == b"x" * 10
-        assert iso.read_regular({str(tmp_path / "file")!r}, limit=4) == b"xxxx"
+        root = {str(tmp_path)!r}
+        assert iso.read_under(root, "file") == b"x" * 10
+        assert iso.read_under(root, "file", limit=4) == b"xxxx"
         for bad in ("fifo", "link"):
             try:
-                iso.read_regular({str(tmp_path)!r} + "/" + bad)
+                iso.read_under(root, bad)
             except (ValueError, OSError):
                 continue
             sys.exit("read " + bad)
@@ -55,6 +56,29 @@ def test_read_regular_never_blocks_and_reads_regular_files_only(tmp_path):
     """)
     run = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=30)
     assert run.stdout.strip() == "OK", run.stderr[-2000:]
+
+
+@pytest.mark.parametrize("as_uid", [False, True])
+def test_read_under_never_leaves_the_trusted_root(tmp_path, as_uid):
+    """S1: the agent controls its run directory, so any component of an output's path can be a symlink (out ->
+    tests/hidden), a `..`, or a hard link. read_under walks from the trusted root one component at a time without
+    following anything, and refuses links, `..`, hard-linked files and other devices. With a UID the walk runs in a
+    child that has become that UID (unprivileged: this user), so it can never read more than the agent could."""
+    run, secret = tmp_path / "run", tmp_path / "tests" / "hidden"
+    (run / "out" / "notation").mkdir(parents=True)
+    (run / "out" / "notation" / "w1.json").write_text("mine")
+    secret.mkdir(parents=True)
+    (secret / "w1.json").write_text("SECRET")
+    (run / "evil").symlink_to(secret)
+    (run / "deep").mkdir()
+    (run / "deep" / "notation").symlink_to(secret)
+    os.link(secret / "w1.json", run / "out" / "hard.json")
+    uid = os.getuid() if as_uid else None
+    assert iso.read_under(run, "out/notation/w1.json", uid=uid) == b"mine"
+    for rel in ("evil/w1.json", "deep/notation/w1.json", "../tests/hidden/w1.json", "out/../evil/w1.json",
+                "out/./notation/w1.json", str(secret / "w1.json"), "", "out/hard.json", "out/notation"):
+        with pytest.raises((ValueError, OSError)):
+            iso.read_under(run, rel, uid=uid)
 
 
 def test_copy_tree_keeps_directories_and_regular_files_only(tmp_path):

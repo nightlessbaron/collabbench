@@ -26,8 +26,13 @@ A task opts in by naming a dedicated unprivileged UID in tests/agent_uid. The in
 - copy_tree(src, dst, root_owned) -> the one symlink policy: the tree agent programs run from holds directories and
   regular files only. Symlinks, FIFOs, sockets and devices are never followed and never copied; their paths are
   returned, so a check can fail on them. `.git` is skipped.
-- read_regular(path, limit) -> the bytes of a file an agent program left: never through a symlink, never blocking
-  (a FIFO is refused at once), regular files only, at most `limit` bytes.
+- read_under(root, rel, limit, uid) -> the bytes of a file an agent program left at `rel` beneath `root`, a
+  directory the grader trusts (the agent may control everything inside it). The path is walked from `root` one
+  component at a time without following anything (O_DIRECTORY | O_NOFOLLOW per directory; O_NOFOLLOW | O_NONBLOCK
+  for the file), and `..`, `.`, empty and absolute paths, symlinks anywhere on the path, non-regular files (a FIFO is
+  refused at once), hard-linked files and files on another device are refused. At most `limit` bytes. With `uid`
+  (root only; or this user's own UID) the whole read runs in a child that has become that UID, so it can never read
+  more than the agent could: the tests are closed to it.
 """
 
 import ctypes
@@ -133,11 +138,27 @@ def copy_tree(src, dst, root_owned: bool) -> list[str]:
     return sorted(skipped)
 
 
-def read_regular(path, limit: int = 64 << 20) -> bytes:
-    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+def _components(rel) -> list[str]:
+    rel = os.fspath(rel)
+    parts = rel.split("/")
+    if not rel or rel.startswith("/") or any(part in ("", ".", "..") for part in parts):
+        raise ValueError(f"not a plain relative path: {rel!r}")
+    return parts
+
+
+def _walk_read(root, parts: list[str], limit: int) -> bytes:
+    fds = [os.open(root, os.O_RDONLY | os.O_DIRECTORY)]
     try:
-        if not stat.S_ISREG(os.fstat(fd).st_mode):
-            raise ValueError(f"{path} is not a regular file")
+        device = os.fstat(fds[0]).st_dev
+        for part in parts[:-1]:
+            fds.append(os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fds[-1]))
+        fd = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=fds[-1])
+        fds.append(fd)
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode):
+            raise ValueError(f"{'/'.join(parts)} is not a regular file")
+        if info.st_nlink != 1 or info.st_dev != device:
+            raise ValueError(f"{'/'.join(parts)} is linked from elsewhere")
         chunks, left = [], limit
         while left > 0:
             chunk = os.read(fd, min(left, 1 << 20))
@@ -147,7 +168,36 @@ def read_regular(path, limit: int = 64 << 20) -> bytes:
             left -= len(chunk)
         return b"".join(chunks)
     finally:
-        os.close(fd)
+        for fd in reversed(fds):
+            os.close(fd)
+
+
+def read_under(root, rel, limit: int = 64 << 20, uid: int | None = None) -> bytes:
+    parts = _components(rel)
+    if uid is None:
+        return _walk_read(root, parts, limit)
+    read, write = os.pipe()
+    pid = os.fork()
+    if pid == 0:
+        os.close(read)
+        try:
+            _drop(uid)
+            payload = b"0" + _walk_read(root, parts, limit)
+        except BaseException as e:  # noqa: BLE001 - reported to the parent, which raises
+            payload = b"1" + f"{type(e).__name__}: {e}".encode()
+        try:
+            view = memoryview(payload)
+            while view:
+                view = view[os.write(write, view):]
+        finally:
+            os._exit(0)
+    os.close(write)
+    with os.fdopen(read, "rb") as reader:
+        payload = reader.read()
+    os.waitpid(pid, 0)
+    if payload[:1] == b"0":
+        return payload[1:]
+    raise ValueError(f"{rel}: " + (payload[1:].decode("utf-8", "replace") or "the reader died"))
 
 
 # --- the agent UID --------------------------------------------------------------------------------------------------

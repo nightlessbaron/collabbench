@@ -13,6 +13,8 @@ runs as root, as it does in the verifier container (isolation.mode is "isolated"
   from, so a program can neither change what is graded nor write next to it. The copy holds directories and regular
   files only: symlinks and special files are dropped, and listed in SKIPPED for checks that must fail on them;
 - a program's output goes to files, read back at most OUTPUT_LIMIT bytes, so no output size can exhaust memory;
+- files the programs leave are read as the agent UID, walked from the work root without following any link
+  (read_regular, isolation.read_under): a symlinked output directory cannot make root read the tests;
 - after every run, every process of the UID and every descendant of this process (a child subreaper) is killed
   (isolation.reap), and the run returns only once none is left.
 Without root, agent programs run only under explicit local grading (isolation.LOCAL_ENV, as localcheck sets it), as
@@ -156,8 +158,15 @@ def fresh_run_dir(files=None):
 # --- reading what the agents left -----------------------------------------------------------------------------------
 
 def read_regular(path, limit=64 << 20):
-    """Bytes of a regular file the agents left: never through a symlink, never blocking, never more than `limit`."""
-    return iso.read_regular(path, limit)
+    """Bytes of a regular file the agents left, in the graded copy or a run directory: read as the agent UID when
+    isolated (never more than the agents could read), walked from the work root without following any link, never
+    blocking, never more than `limit` (isolation.read_under). Any other path is refused."""
+    setup_work()
+    path = os.fspath(path)
+    rel = os.path.relpath(path, _root[0]) if os.path.isabs(path) and ".." not in path.split("/") else ".."
+    if rel == ".." or rel.startswith("../"):
+        raise ValueError(f"{path} is not in the graded workspace or a run directory")
+    return iso.read_under(_root[0], rel, limit, uid=AGENT_UID if ISOLATED else None)
 
 
 def read_text(path, limit=64 << 20):

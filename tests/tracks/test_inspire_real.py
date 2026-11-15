@@ -12,6 +12,7 @@ import re
 import shutil
 import subprocess
 import sys
+import textwrap
 import time
 import tomllib
 from pathlib import Path
@@ -429,6 +430,54 @@ def test_harness_reads_never_block_on_a_fifo(shipped_harness, tmp_path):
     assert run.stdout.strip() == "REFUSED", run.stderr[-2000:]
 
 
+def test_harness_reads_never_leave_the_work_tree(shipped_harness, tmp_path):
+    """S1: root reads an agent's outputs from the run directory the agent controls. A parent directory that is a
+    symlink (out -> the tests' hidden directory), or a `..`, must never hand root a file outside it."""
+    secret = tmp_path / "hidden"
+    secret.mkdir()
+    (secret / "ref.json").write_text('"SECRET"')
+    code = textwrap.dedent(f"""
+        import os, sys
+        sys.path.insert(0, {str(shipped_harness.parent)!r})
+        import harness as h
+        run = h.fresh_run_dir({{}})
+        os.symlink({str(secret)!r}, os.path.join(run, "out"))
+        with open(os.path.join(run, "..", "beside.json"), "w") as f:
+            f.write('"BESIDE"')
+        for path in (os.path.join(run, "out", "ref.json"), os.path.join(run, "..", "beside.json"),
+                     {str(secret / "ref.json")!r}):
+            try:
+                print("LEAK", h.read_json(path))
+            except (ValueError, OSError):
+                print("REFUSED")
+    """)
+    env = {**os.environ, iso.LOCAL_ENV: "1", "COLLAB_WORKSPACE": str(tmp_path / "no-workspace")}
+    run = subprocess.run([sys.executable, "-B", "-c", code], capture_output=True, text=True, timeout=60, env=env)
+    assert run.stdout.split() == ["REFUSED"] * 3, (run.stdout, run.stderr[-2000:])
+
+
+def test_score_parent_symlink_cannot_forge_an_output(tmp_path):
+    """S1 end to end: build_catalog links its output directory to reference outputs under tests/ (here planted in
+    a copy of the task, standing for any root-readable reference). Root must not read them as the program's output:
+    that output fails, as if missing."""
+    d = tmp_path / score_recovery.NAME
+    shutil.copytree(task_dir(score_recovery.NAME), d)
+    cre = real.load_module(d / "tests" / "hidden" / score_recovery.LIB, "_cre_forge")
+    reference = d / "tests" / "hidden" / "ref_out"
+    (reference / "notation").mkdir(parents=True)
+    for work_id, notation in cre.build_corpus(8101, "hidden")["notation"].items():
+        (reference / "notation" / f"{work_id}.json").write_text(json.dumps(notation))
+    hostile_build = f'''import os, sys
+os.symlink({str(reference)!r}, os.path.join(sys.argv[-1], "out"))
+'''
+    script = f'''bash "$TASK/solution/solve.sh"
+cat > "$WORKSPACE/build_catalog.py" <<'PY'
+{hostile_build}PY
+'''
+    r = apply_and_score(d, script, tmp_path)
+    assert "test_D2_build_catalog_notation" in failed(r) and r["requirements"]["D2"] is False
+
+
 def test_harness_uses_the_one_shared_isolation_module(shipped_harness):
     """I3: the task harness keeps no sweep, lock or safe read of its own; it loads tests/isolation.py, the copy of
     taskfmt/frontier/isolation.py that write_task ships."""
@@ -449,31 +498,51 @@ def test_score_d3_fails_on_a_symlink_under_publish(tmp_path):
     assert failed(r) <= {n for n in r["tests"] if n.startswith("test_D3_")}
 
 
+PLANT_IN_RUN_DIR = {  # the parent-symlink attack: the run directory's out/ -> the tests' hidden directory
+    cif_canon.NAME: '_os.path.join(_os.path.dirname(_os.path.abspath(_sys.argv[1])), "out")',
+    score_recovery.NAME: '_os.path.join(_sys.argv[-1], "out")'}
+
+
+def live_hostile_solution(name: str) -> str:
+    """solve.sh for the live test: the hostile program where the verifier will run it as the agent UID."""
+    plant = (PLANT_IN_RUN_DIR[name], "/tests/hidden")
+    if name == cif_canon.NAME:  # cif/parse.py also tries to read the reference library and print its answer
+        program = hostile.program("/tests", "/logs/verifier", [], plant=plant,
+                                  steal=(f"/tests/hidden/{cif_canon.LIB}", STEAL_CIF)) + 'print("{}")\n'
+        return f'mkdir -p "$W/cif"\ncat > "$W/cif/parse.py" <<\'PY\'\n{program}PY\n'
+    program = hostile.program("/tests", "/logs/verifier", [], plant=plant)  # build_catalog.py: out/ -> /tests/hidden
+    return f'bash "$(dirname "$0")/reference.sh"\ncat > "$W/build_catalog.py" <<\'PY\'\n{program}PY\n'
+
+
 @pytest.mark.live
-def test_live_hostile_agent_program_is_contained(tmp_path):
-    """Live (Modal, and a verifier running as root, as Harbor runs it): the oracle agent leaves the hostile parse.py
-    in the workspace; the verifier runs it as the agent UID. It can neither read the reference library nor write the
-    tests or /logs/verifier, and no process of it outlives its run. Costs one oracle trial."""
+@pytest.mark.parametrize("name", sorted(BUILDERS))
+def test_live_hostile_agent_program_is_contained(tmp_path, name):
+    """Live (Modal, and a verifier running as root, as Harbor runs it): the oracle agent leaves a hostile program in
+    the workspace; the verifier runs it as the agent UID. It can neither read the reference library, nor make root
+    read the tests through a symlinked output directory, nor write the tests or /logs/verifier, and no process of
+    it outlives its run. Costs one oracle trial per task."""
     from collabbench import settings
     from collabbench.runner.gates import _job, parse_trial
     from collabbench.runner.harbor import harbor_env
     from collabbench.runner.pools import POOLS
 
-    d = tmp_path / cif_canon.NAME
-    shutil.copytree(task_dir(cif_canon.NAME), d)
-    program = hostile_parse("/tests", "/logs/verifier")  # also tries to read /tests/hidden/cif_ref_lib.py
-    (d / "solution" / "solve.sh").write_text(
-        '#!/bin/bash\nset -euo pipefail\nW="${WORKSPACE:-/workspace}"\nmkdir -p "$W/cif"\n'
-        f"cat > \"$W/cif/parse.py\" <<'PY'\n{program}PY\n")
+    d = tmp_path / name
+    shutil.copytree(task_dir(name), d)
+    shutil.copy(d / "solution" / "solve.sh", d / "solution" / "reference.sh")
+    (d / "solution" / "solve.sh").write_text('#!/bin/bash\nset -euo pipefail\nW="${WORKSPACE:-/workspace}"\n'
+                                             + live_hostile_solution(name))
     jobs = tmp_path / "jobs"
     subprocess.run(_job(d, "oracle", [], jobs, "hostile"), env=harbor_env(POOLS["personal"]), cwd=settings.REPO,
                    check=True, timeout=3600)
     trial = parse_trial(next((jobs / "hostile").glob("*/result.json")).parent)
     rewards = trial["rewards"]
-    assert trial["exception"] is None and "pwned" not in rewards and rewards["reward"] <= 0.05
-    assert rewards["isolated"] == 1 and rewards["req_D1"] == 0  # the reference library could not be read
+    assert trial["exception"] is None and "pwned" not in rewards and rewards["isolated"] == 1
     assert not rewards.get("tests_tampered") and not rewards.get("verifier_error")
     assert rewards["agent_processes_left"] == 0 and not rewards.get("agent_processes_survived")
+    if name == cif_canon.NAME:  # the reference library could not be read
+        assert rewards["req_D1"] == 0 and rewards["reward"] <= 0.05
+    else:  # build_catalog's output, linked to /tests/hidden, was not read as its output
+        assert rewards["req_D2"] == 0
 
 
 # --- reproducibility ------------------------------------------------------------------------------------------------
