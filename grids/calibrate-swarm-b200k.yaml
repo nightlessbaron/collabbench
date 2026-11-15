@@ -1,0 +1,11 @@
+# Task 13: Swarm B sweep. At B=300000 solo_B scored 1.0 on all 6 instances (bulk read + one scripted migration, ~300k tokens).
+pool: personal
+model: deepseek-v4-1-flash-1017
+effort: high
+concurrency: 3
+root: ..
+tracks:
+  swarm:
+    budget: 200000
+    instances: [tasks/swarm/swarm-0001, tasks/swarm/swarm-0002, tasks/swarm/swarm-0003]
+    conditions: {solo_B: 1}
