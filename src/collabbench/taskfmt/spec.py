@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 KIT = Path(__file__).resolve().parent / "kit"
+ISOLATION = Path(__file__).resolve().parent / "frontier" / "isolation.py"  # shipped as tests/isolation.py
 ARTIFACTS = ["/workspace", "/snapshots", "/var/log/collab-tripwire"]
 
 
@@ -39,6 +40,12 @@ def _write(path: Path, text: str, mode: int | None = None) -> None:
 
 def _toml_list(items: list[str]) -> str:
     return "[" + ", ".join(json.dumps(i) for i in items) + "]"
+
+
+def grading_deadline(spec: TaskSpec) -> int:
+    """Seconds grade.py may take: the verifier timeout less a margin, so reward.json is always written before
+    Harbor stops the verifier (which would leave no reward, and the trial counted as an infra error)."""
+    return spec.verifier_timeout_s - max(120, spec.verifier_timeout_s // 10)
 
 
 def write_task(spec: TaskSpec, out: Path) -> Path:
@@ -88,9 +95,11 @@ memory_mb = {spec.memory_mb}
     _write(d / "solution" / "solve.sh", "#!/bin/bash\nset -euo pipefail\n" + spec.solution_sh, 0o755)
     tests = d / "tests"
     _write(tests / "Dockerfile", (KIT / "Dockerfile.tests").read_text())
-    _write(tests / "test.sh", (KIT / "test.sh").read_text(), 0o755)
+    _write(tests / "test.sh", (KIT / "test.sh").read_text().replace("{deadline_s}", str(grading_deadline(spec))),
+           0o755)
     for kit_file in ("grade.py", "pytest_score.py"):
         _write(tests / kit_file, (KIT / kit_file).read_text())
+    _write(tests / "isolation.py", ISOLATION.read_text())
     _write(tests / "hidden" / "conftest.py", (KIT / "hidden_conftest.py").read_text())
     _write(tests / "score.py", spec.score_py)
     _write(tests / "tripwire_nonce.txt", nonce + "\n")

@@ -23,9 +23,10 @@ def run_pytest(workspace: Path, hidden: Path = HIDDEN, timeout_s: int = 600) -> 
     pinned = json.loads(expected.read_text()) if expected.exists() else None
     with tempfile.TemporaryDirectory() as tmp:
         junit = Path(tmp) / "junit.xml"
-        # -I: no PYTHONPATH, no cwd on sys.path, no user site. hidden/conftest.py appends the workspace to sys.path.
+        # -I: no PYTHONPATH, no cwd on sys.path, no user site (and no PYTHON* variables, hence -B: no bytecode written
+        # into tests/). hidden/conftest.py appends the workspace to sys.path.
         env = {**os.environ, "COLLAB_WORKSPACE": str(workspace), "PYTHONDONTWRITEBYTECODE": "1"}
-        cmd = [sys.executable, "-I", "-m", "pytest", str(hidden), "-q", "-p", "no:cacheprovider", "--rootdir",
+        cmd = [sys.executable, "-I", "-B", "-m", "pytest", str(hidden), "-q", "-p", "no:cacheprovider", "--rootdir",
                str(hidden), "-c", os.devnull, f"--junitxml={junit}", "-o", "junit_family=xunit1"]
         try:
             run = subprocess.run(cmd, cwd=workspace, env=env, capture_output=True, timeout=timeout_s)

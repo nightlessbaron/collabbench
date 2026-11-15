@@ -1,4 +1,6 @@
 import json
+import os
+import re
 
 import pytest
 import subprocess
@@ -10,6 +12,7 @@ from pathlib import Path
 
 from harbor.models.task.config import TaskConfig
 
+from collabbench.taskfmt.frontier import isolation as iso
 from collabbench.taskfmt.localcheck import score_locally
 from collabbench.taskfmt.spec import TaskSpec, write_task
 from tests import hostile
@@ -53,7 +56,8 @@ def test_write_task_layout_and_toml(tmp_path):
     for rel in ("task.toml", "instruction.md", "environment/Dockerfile", "environment/workspace/calc.py",
                 "environment/private/alpha.md", "environment/private/_harness/manifest.json",
                 "environment/tripwire.sh", "solution/solve.sh", "tests/Dockerfile", "tests/test.sh",
-                "tests/grade.py", "tests/pytest_score.py", "tests/score.py", "tests/hidden/test_calc.py"):
+                "tests/grade.py", "tests/pytest_score.py", "tests/score.py", "tests/hidden/test_calc.py",
+                "tests/isolation.py"):
         assert (d / rel).is_file(), rel
     raw = tomllib.loads((d / "task.toml").read_text())
     cfg = TaskConfig.model_validate(raw)
@@ -195,6 +199,39 @@ def grade_cmd(d: Path, ws: Path, tmp_path: Path, out: Path, snapshots: Path | No
             str(snapshots or tmp_path / "none"), "--tripwire", str(tmp_path / "none"), "--out", str(out)]
 
 
+def local_env(local: bool = True) -> dict:
+    """Grading without root: tasks that name an agent UID are graded only under the explicit local override."""
+    env = {k: v for k, v in os.environ.items() if k != iso.LOCAL_ENV}
+    return {**env, iso.LOCAL_ENV: "1"} if local else env
+
+
+# The hidden tests of a task that names an agent UID never import agent code into the root pytest: they run it.
+HIDDEN_RUN = '''import os
+import subprocess
+import sys
+
+WS = os.environ["COLLAB_WORKSPACE"]
+
+
+def add(a, b):
+    run = subprocess.run([sys.executable, "-c", f"from calc import add; print(add({a}, {b}))"], cwd=WS,
+                         capture_output=True, text=True, timeout=60)
+    return int(run.stdout.strip() or 0)
+
+
+def test_R1_add():
+    assert add(2, 3) == 5
+
+
+def test_R2_add_negative():
+    assert add(-2, -3) == -5
+'''
+
+
+def isolating_spec(**kw) -> TaskSpec:
+    return toy_spec(hidden_files={"hidden/test_calc.py": HIDDEN_RUN, "agent_uid": "64000\n"}, **kw)
+
+
 def test_expected_tests_are_read_before_agent_code_runs(tmp_path):
     """Agent code that rewrites expected_tests.json while the hidden tests run (here: to the one test it passes)
     does not change what is counted."""
@@ -225,17 +262,148 @@ def test_grade_voids_changed_tests_and_kills_what_agent_code_leaves(tmp_path):
         reward = json.loads((out / "reward.json").read_text())
         assert "pwned" not in reward and reward["reward"] == 0.0
         assert reward["tests_tampered"] == 1 and "verifier_error" not in reward  # the agents' doing: it counts
+        assert reward["req_R1"] == 0 and reward["req_R2"] == 0 and reward["tests_passed"] == 0.0  # M3: all voided
         trace = json.loads((out / "details.json").read_text())["trace"]  # the rewritten score.py scores nothing
         assert [row["reward"] for row in trace] == [0.0] and trace[0]["error"] == "tests changed during grading"
     finally:
         hostile.kill(str(out))
 
 
-def test_grade_reports_agent_processes_when_the_task_names_an_agent_uid(tmp_path):
-    d = write_task(toy_spec(hidden_files={"hidden/test_calc.py": HIDDEN, "agent_uid": "64000\n"}), tmp_path / "t")
+def test_grade_records_isolation_when_the_task_names_an_agent_uid(tmp_path):
+    """I2: reward.json says whether agent code ran isolated, for every task that asks for it."""
+    d = write_task(isolating_spec(), tmp_path / "t")
     ws, out = tmp_path / "ws", tmp_path / "out"
     ws.mkdir()
     (ws / "calc.py").write_text("def add(a, b):\n    return a + b\n")
-    subprocess.run(grade_cmd(d, ws, tmp_path, out), check=True)
+    subprocess.run(grade_cmd(d, ws, tmp_path, out), check=True, env=local_env())
     reward = json.loads((out / "reward.json").read_text())
     assert reward["reward"] == 1.0 and reward["agent_processes_left"] == 0 and "tests_tampered" not in reward
+    assert reward["isolated"] == (1 if os.geteuid() == 0 else 0)
+
+
+def test_grade_refuses_to_run_agent_code_unisolated(tmp_path):
+    """I2: a task that names an agent UID is never graded with agent code running as the grader, unless local
+    grading is asked for explicitly: without root it is a verifier error, and no agent code runs."""
+    if os.geteuid() == 0:
+        pytest.skip("as root grading isolates")
+    d = write_task(isolating_spec(), tmp_path / "t")
+    pinned = (d / "tests" / "hidden" / "expected_tests.json").read_text()
+    ws, out = tmp_path / "ws", tmp_path / "out"
+    ws.mkdir()
+    (ws / "calc.py").write_text(hostile.program(str(d / "tests"), str(out), ["test_R1_add"]) + HALF_RIGHT_ADD)
+    try:
+        subprocess.run(grade_cmd(d, ws, tmp_path, out), check=True, env=local_env(False))
+        time.sleep(0.5)
+        reward = json.loads((out / "reward.json").read_text())
+        assert reward["reward"] == 0.0 and reward["verifier_error"] == 1 and reward["isolated"] == 0
+        assert (d / "tests" / "hidden" / "expected_tests.json").read_text() == pinned  # the program never ran
+        assert not hostile.survivors(str(out))
+    finally:
+        hostile.kill(str(out))
+
+
+SLOW_SCORE = '''import time
+from pathlib import Path
+
+from pytest_score import run_pytest
+
+
+def score(workspace: Path) -> dict:
+    time.sleep(2)
+    return run_pytest(workspace)
+'''
+
+
+def test_grade_scores_the_final_first_and_stops_at_its_deadline(tmp_path):
+    """I1: the final workspace is scored first and reward.json written for it; snapshots are scored only while the
+    deadline allows, the rest are marked, and grading ends by the deadline."""
+    d = write_task(toy_spec(score_py=SLOW_SCORE), tmp_path / "t")
+    ws, out, snaps = tmp_path / "ws", tmp_path / "out", tmp_path / "snapshots"
+    ws.mkdir()
+    (ws / "calc.py").write_text("def add(a, b):\n    return a + b\n")
+    snaps.mkdir()
+    for i in range(6):
+        make_snapshot(ws, snaps / f"{i:04d}.0-workspace.tar.gz")
+    (snaps / "index.json").write_text(json.dumps([{"file": f"{i:04d}.0-workspace.tar.gz", "t": float(i)}
+                                                  for i in range(6)]))
+    t0 = time.monotonic()
+    subprocess.run(grade_cmd(d, ws, tmp_path, out, snaps) + ["--deadline", "7"], check=True)
+    assert time.monotonic() - t0 < 12
+    reward = json.loads((out / "reward.json").read_text())
+    assert reward["reward"] == 1.0 and reward["snapshots_truncated"] >= 3 and "verifier_error" not in reward
+    trace = json.loads((out / "details.json").read_text())["trace"]
+    assert len(trace) == 6 and trace[-1]["error"] == "verifier time budget" and trace[0]["reward"] == 1.0
+
+
+HANGING_CALC = '''import signal
+import time
+
+signal.signal(signal.SIGTERM, signal.SIG_IGN)
+end = time.time() + 120
+while time.time() < end:
+    time.sleep(0.5)
+
+
+def add(a, b):
+    return a + b
+'''
+
+
+def test_a_hanging_agent_program_still_scores_zero_not_an_infra_error(tmp_path):
+    """I1 invariant: no agent behaviour leaves the trial without a reward.json. A program that hangs (and ignores
+    SIGTERM) costs its score, never the trial: reward 0, no verifier_error, within the deadline."""
+    d = write_task(toy_spec(), tmp_path / "t")
+    ws, out = tmp_path / "ws", tmp_path / "out"
+    ws.mkdir()
+    (ws / "calc.py").write_text(HANGING_CALC)
+    t0 = time.monotonic()
+    subprocess.run(grade_cmd(d, ws, tmp_path, out) + ["--deadline", "10"], check=True, timeout=60)
+    assert time.monotonic() - t0 < 20
+    reward = json.loads((out / "reward.json").read_text())
+    assert reward["reward"] == 0.0 and reward["score_timeout"] == 1 and "verifier_error" not in reward
+
+
+def test_a_killed_grader_leaves_a_zero_reward(tmp_path):
+    """I1 invariant, the last resort: reward.json (reward 0, grading_incomplete) is in place before any agent
+    code runs, so even a grader killed mid-score leaves a reward that counts."""
+    d = write_task(toy_spec(), tmp_path / "t")
+    ws, out = tmp_path / "ws", tmp_path / "out"
+    ws.mkdir()
+    (ws / "calc.py").write_text(HANGING_CALC.replace("time.time() + 120", "time.time() + 15"))
+    subprocess.run(["timeout", "-s", "KILL", "4"] + grade_cmd(d, ws, tmp_path, out))
+    reward = json.loads((out / "reward.json").read_text())
+    assert reward == {"reward": 0.0, "grading_incomplete": 1}
+
+
+HIDDEN_PATH = '''import os
+import sys
+
+
+def test_R1_workspace_off_the_path():
+    assert os.environ["COLLAB_WORKSPACE"] not in sys.path
+'''
+
+
+def test_isolating_tasks_keep_the_workspace_off_the_root_pytest_path(tmp_path):
+    """M1: with an agent UID, the root pytest never has the agents' workspace on sys.path."""
+    d = write_task(toy_spec(requirements=["R1"], hidden_files={"hidden/test_calc.py": HIDDEN_PATH,
+                                                                "agent_uid": "64000\n"}), tmp_path / "t")
+    assert score_locally(d, "reference")["requirements"] == {"R1": True}
+
+
+def test_local_scoring_writes_no_bytecode_into_the_tests(tmp_path):
+    """M5: bytecode written into tests/ would be baked into the verifier image (COPY . /tests)."""
+    d = write_task(toy_spec(), tmp_path / "t")
+    score_locally(d, "reference")
+    assert not [p.relative_to(d).as_posix() for p in (d / "tests").rglob("*") if p.name == "__pycache__"
+                or p.suffix == ".pyc"]
+
+
+def test_grade_uses_the_one_shared_isolation_module(tmp_path):
+    """I3: the sweep, the locks and the safe reads live once, in taskfmt/frontier/isolation.py, which write_task
+    ships as tests/isolation.py; grade.py keeps no copy of its own."""
+    d = write_task(toy_spec(), tmp_path / "t")
+    assert (d / "tests" / "isolation.py").read_text() == Path(iso.__file__).read_text()
+    grade = (d / "tests" / "grade.py").read_text()
+    assert re.search(r"^import isolation", grade, re.M)
+    assert not any(marker in grade for marker in ("/proc", "prctl", "chown", "SIGKILL"))

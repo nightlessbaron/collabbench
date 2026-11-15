@@ -268,9 +268,11 @@ def _all_files(root):
 
 
 def test_D3_publish_has_no_sensitive_content():
-    """Nothing shipped carries a source map, endpoint, token, note or fixture."""
+    """Nothing shipped carries a source map, endpoint, token, note or fixture, and the tree holds files, not links
+    (the seed failed any symlink in the agent's files; the graded copy drops them, so they are failed here)."""
     root = h.ws("publish")
     assert os.path.isdir(root), "no published tree"
+    assert not h.skipped("publish"), "not regular files: %s" % ", ".join(h.skipped("publish"))
     published = {path: _text(h.read_regular(path)) for path in _all_files(root)}
     rel = {os.path.relpath(path, root) for path in published}
     assert "data_bundle.json" in rel, "no published data bundle"

@@ -1,18 +1,23 @@
 """How the hidden tests run the agents' programs: the taskmaker.frontier verifier kit (harness.py), adapted to the
-CollabBench verifier.
+CollabBench verifier. Every isolation primitive comes from tests/isolation.py, the kit's copy of
+collabbench.taskfmt.frontier.isolation, shared with grade.py.
 
 Isolation (as the seed kit had it). The task names a dedicated unprivileged UID in tests/agent_uid. When the verifier
-runs as root, as it does in the verifier container:
-- every agent program runs as that UID and GID with no supplementary groups;
-- the tests directory (graders, reference libraries, expected_tests.json, score modules) is made root-owned and
-  unreadable and unwritable for that UID, and so is /logs/verifier for writing, before any agent program runs;
-- each run gets a fresh directory filled first and then chowned to that UID; nothing else is chowned;
-- the graded workspace is copied first into a root-owned, read-only tree that the programs run from, so a program
-  can neither change what is graded nor write next to it;
-- after every run, every process the UID owns is killed (and every descendant of this process, which is a child
-  subreaper, so a double-forked daemon cannot escape), and the run returns only once none is left.
-Without root (local checks) the programs run as the current user; only the descendant reaping and the read-only
-workspace copy apply, and the kit's grade.py detects a changed tests directory instead of preventing it.
+runs as root, as it does in the verifier container (isolation.mode is "isolated"):
+- every agent program runs as that UID and GID with no supplementary groups, under isolation.LIMITS;
+- before any agent program runs, the tests directory (graders, reference libraries, expected_tests.json, score
+  modules) is closed to that UID, and /logs/verifier made unwritable for it (grade.py has done so already, and has
+  probed it as the UID);
+- each run gets a fresh directory, filled first and then handed to that UID (isolation.give), the only thing it owns;
+- the graded workspace is copied first (isolation.copy_tree) into a root-owned, read-only tree that the programs run
+  from, so a program can neither change what is graded nor write next to it. The copy holds directories and regular
+  files only: symlinks and special files are dropped, and listed in SKIPPED for checks that must fail on them;
+- a program's output goes to files, read back at most OUTPUT_LIMIT bytes, so no output size can exhaust memory;
+- after every run, every process of the UID and every descendant of this process (a child subreaper) is killed
+  (isolation.reap), and the run returns only once none is left.
+Without root, agent programs run only under explicit local grading (isolation.LOCAL_ENV, as localcheck sets it), as
+the current user; then only the descendant reaping and the read-only copy apply, and grade.py detects a changed tests
+directory instead of preventing it. Otherwise ("refuse") no agent program runs.
 
 One addition: the kit gives a whole score 900 s, so a program that hangs must not take every other deliverable's
 credit with it. run_agent takes an optional `budget` (a name and seconds): time lost to that program's timeouts is
@@ -20,35 +25,31 @@ charged to it, and once the budget is spent its remaining runs fail as timeouts 
 """
 
 import atexit
-import ctypes
 import hashlib
+import importlib.util
 import json
 import os
 import shutil
-import signal
-import stat
 import subprocess
 import sys
 import tempfile
-import time
 from pathlib import Path
 
-TESTS = Path(__file__).resolve().parent.parent  # tests/: score.py, pytest_score.py, grade.py, hidden/
+TESTS = Path(__file__).resolve().parent.parent  # tests/: score.py, pytest_score.py, grade.py, isolation.py, hidden/
+_spec = importlib.util.spec_from_file_location("isolation", TESTS / "isolation.py")  # by path: never the workspace's
+iso = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(iso)
+
 ORIGINAL = os.environ.get("COLLAB_WORKSPACE", "/workspace")  # the workspace grade.py asked us to score
 PYTHON = sys.executable  # the verifier's Python 3.12, standard library plus pytest and numpy
 LOGS = Path("/logs/verifier")
+OUTPUT_LIMIT = 16 << 20
 
-
-def _agent_uid():
-    try:
-        return int((TESTS / "agent_uid").read_text().strip())
-    except (OSError, ValueError):
-        return None
-
-
-AGENT_UID = _agent_uid()
-ISOLATED = AGENT_UID is not None and os.geteuid() == 0
+AGENT_UID = iso.agent_uid(TESTS)
+MODE = iso.mode(AGENT_UID)
+ISOLATED = MODE == "isolated"
 WORKSPACE = ORIGINAL  # replaced by the read-only copy in setup_work
+SKIPPED = []  # workspace paths the copy dropped: symlinks and special files
 _root = [None]
 _counter = [0]
 _budgets = {}
@@ -59,114 +60,9 @@ def ws(*parts):
     return os.path.join(WORKSPACE, *parts)
 
 
-# --- processes ------------------------------------------------------------------------------------------------------
-
-def _become_subreaper():
-    try:  # PR_SET_CHILD_SUBREAPER: orphans of our children are reparented to us, not to init
-        ctypes.CDLL(None, use_errno=True).prctl(36, 1, 0, 0, 0)
-    except Exception:  # noqa: BLE001 - not Linux; the UID sweep still applies
-        pass
-
-
-def _procs():
-    """{pid: (ppid, uid, state)} for every live process."""
-    out = {}
-    for name in os.listdir("/proc"):
-        if not name.isdigit():
-            continue
-        try:
-            with open(f"/proc/{name}/stat") as f:
-                fields = f.read().rsplit(")", 1)[1].split()
-            out[int(name)] = (int(fields[1]), os.stat(f"/proc/{name}").st_uid, fields[0])
-        except (OSError, IndexError, ValueError):
-            pass
-    return out
-
-
-def _targets(uid):
-    procs = _procs()
-    me = os.getpid()
-    children = {}
-    for pid, (ppid, _, _) in procs.items():
-        children.setdefault(ppid, []).append(pid)
-    found, stack = set(), list(children.get(me, []))
-    while stack:
-        pid = stack.pop()
-        if pid not in found:
-            found.add(pid)
-            stack.extend(children.get(pid, []))
-    if uid is not None:
-        found |= {pid for pid, (_, owner, _) in procs.items() if owner == uid}
-    return {pid for pid in found if pid != me and procs.get(pid, (0, 0, "Z"))[2] != "Z"}
-
-
-def reap(uid=None, rounds=100):
-    """Kill every descendant of this process and, when isolated, every process the agent UID owns; return once none
-    is alive. Raises if some survive (grading must not go on next to agent code)."""
-    uid = AGENT_UID if uid is None and ISOLATED else uid
-    for _ in range(rounds):
-        alive = _targets(uid)
-        while True:  # collect zombies reparented to us
-            try:
-                pid, _ = os.waitpid(-1, os.WNOHANG)
-            except ChildProcessError:
-                break
-            if pid == 0:
-                break
-        if not alive:
-            return
-        for pid in alive:
-            try:
-                os.kill(pid, signal.SIGKILL)
-            except (ProcessLookupError, PermissionError):
-                pass
-        time.sleep(0.02)
-    raise RuntimeError(f"agent processes survive: {sorted(_targets(uid))}")
-
-
-# --- the filesystem -------------------------------------------------------------------------------------------------
-
-def _lock(path, mode_mask, recursive=True, strict=True):
-    """Root-own `path` (recursively) and clear `mode_mask` from every entry's mode; symlinks are left alone.
-    strict=False tolerates a mount that refuses the change (grade.py replaces the reward files anyway)."""
-    path = Path(path)
-    if not path.exists() or path.is_symlink():
-        return
-    entries = [path] + (list(path.rglob("*")) if recursive and path.is_dir() else [])
-    for p in entries:
-        if p.is_symlink():
-            continue
-        try:
-            os.chown(p, 0, 0)
-            os.chmod(p, stat.S_IMODE(p.stat().st_mode) & ~mode_mask)
-        except OSError:
-            if strict:
-                raise
-
-
-def _skip(directory, names):
-    """.git, and anything that is not a directory, regular file or symlink (a FIFO would hang the copy)."""
-    out = []
-    for n in names:
-        mode = os.lstat(os.path.join(directory, n)).st_mode
-        if n == ".git" or not (stat.S_ISDIR(mode) or stat.S_ISREG(mode) or stat.S_ISLNK(mode)):
-            out.append(n)
-    return out
-
-
-def _readonly_copy(src, dst):
-    """Copy the graded workspace to a root-owned tree the agent UID can read and run but not change."""
-    shutil.copytree(src, dst, symlinks=True, ignore=_skip)
-    for p in [Path(dst)] + list(Path(dst).rglob("*")):
-        if p.is_symlink():
-            continue
-        if ISOLATED:
-            os.chown(p, 0, 0)
-        mode = stat.S_IMODE(p.stat().st_mode)
-        if p.is_dir():
-            os.chmod(p, 0o755)
-        else:
-            os.chmod(p, 0o755 if mode & 0o111 else 0o644)
+def skipped(prefix):
+    """Paths under workspace directory `prefix` that the graded copy dropped (symlinks, FIFOs, devices)."""
+    return [p for p in SKIPPED if p == prefix or p.startswith(prefix.rstrip("/") + "/")]
 
 
 def setup_work():
@@ -174,18 +70,23 @@ def setup_work():
     global WORKSPACE
     if _root[0] is not None:
         return
-    _become_subreaper()
+    iso.become_subreaper()
     if ISOLATED:
-        _lock(TESTS, 0o077)  # graders and references: neither readable nor writable by the agent UID
-        _lock(LOGS.parent, 0o022, recursive=False, strict=False)
-        _lock(LOGS, 0o022, strict=False)
+        iso.lockdown(TESTS, [LOGS])
     root = tempfile.mkdtemp(prefix="verify_work_")
-    atexit.register(shutil.rmtree, root, True)  # the copy and every run directory go with the session
     os.chmod(root, 0o755)
     _root[0] = root
     if os.path.isdir(ORIGINAL):
         WORKSPACE = os.path.join(root, "workspace")
-        _readonly_copy(ORIGINAL, WORKSPACE)
+        SKIPPED[:] = iso.copy_tree(ORIGINAL, WORKSPACE, root_owned=ISOLATED)
+
+
+def _cleanup():
+    if _root[0] is not None:
+        shutil.rmtree(_root[0], ignore_errors=True)
+
+
+atexit.register(_cleanup)  # the copy and every run directory go with the session
 
 
 def _env():
@@ -194,30 +95,44 @@ def _env():
             "PYTHONDONTWRITEBYTECODE": "1"}
 
 
+def reap():
+    found, survivors = iso.reap(AGENT_UID if ISOLATED else None)
+    if survivors:
+        raise RuntimeError(f"{survivors} agent processes survive every kill")
+
+
+def _read_back(f):
+    f.seek(0)
+    data = f.read(OUTPUT_LIMIT)
+    return data.decode("utf-8", "replace").replace("\r\n", "\n").replace("\r", "\n")
+
+
 def run_agent(cmd, cwd, timeout, stdin=None, budget=None):
     """Run agent code (an argv list) in `cwd`, as the agent UID when isolated; nothing it started survives the call.
-    Returns the CompletedProcess; raises subprocess.TimeoutExpired past `timeout` seconds, or at once when
-    `budget` = (name, seconds) is spent."""
+    Returns a CompletedProcess with text output (at most OUTPUT_LIMIT bytes of each stream); raises
+    subprocess.TimeoutExpired past `timeout` seconds, or at once when `budget` = (name, seconds) is spent."""
+    if MODE == "refuse":
+        raise RuntimeError(f"refusing to run agent code unisolated (not root; {iso.LOCAL_ENV} unset)")
     setup_work()
     if budget is not None:
         name, seconds = budget
         if _budgets.setdefault(name, float(seconds)) <= 0:
             raise subprocess.TimeoutExpired(cmd, 0)
-    who = {"user": AGENT_UID, "group": AGENT_UID, "extra_groups": []} if ISOLATED else {}
-    proc = subprocess.Popen(cmd, cwd=cwd, env=_env(), text=True, start_new_session=True,
-                            stdin=subprocess.PIPE if stdin is not None else subprocess.DEVNULL,
-                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, **who)
-    try:
-        out, err = proc.communicate(input=stdin, timeout=timeout)
-    except subprocess.TimeoutExpired:
-        reap()  # first: a leftover process could hold the output pipes open
-        proc.communicate()
-        if budget is not None:
-            _budgets[budget[0]] -= timeout
-        raise
-    finally:
-        reap()
-    return subprocess.CompletedProcess(cmd, proc.returncode, out, err)
+    who = iso.popen_kwargs(AGENT_UID) if ISOLATED else {}
+    with tempfile.TemporaryFile(dir=_root[0]) as out, tempfile.TemporaryFile(dir=_root[0]) as err:
+        proc = subprocess.Popen(cmd, cwd=cwd, env=_env(), start_new_session=True, stdout=out, stderr=err,
+                                stdin=subprocess.PIPE if stdin is not None else subprocess.DEVNULL, **who)
+        try:
+            proc.communicate(input=stdin.encode() if isinstance(stdin, str) else stdin, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            reap()
+            proc.wait()
+            if budget is not None:
+                _budgets[budget[0]] -= timeout
+            raise
+        finally:
+            reap()
+        return subprocess.CompletedProcess(cmd, proc.returncode, _read_back(out), _read_back(err))
 
 
 def fresh_run_dir(files=None):
@@ -230,31 +145,19 @@ def fresh_run_dir(files=None):
     for name, content in (files or {}).items():
         p = os.path.join(d, name)
         os.makedirs(os.path.dirname(p), exist_ok=True)
-        if isinstance(content, bytes):
-            with open(p, "wb") as f:
-                f.write(content)
-        else:
-            shutil.copyfile(content, p)
-    if ISOLATED:
-        for dirpath, dirs, fs in os.walk(d):
-            for n in dirs + fs:
-                os.lchown(os.path.join(dirpath, n), AGENT_UID, AGENT_UID)
-        os.lchown(d, AGENT_UID, AGENT_UID)
+        with open(p, "wb") as f:
+            f.write(content if isinstance(content, bytes) else Path(content).read_bytes())
     os.chmod(d, 0o755)
+    if ISOLATED:
+        iso.give(d, AGENT_UID)
     return d
 
 
 # --- reading what the agents left -----------------------------------------------------------------------------------
 
 def read_regular(path, limit=64 << 20):
-    """Bytes of a regular file the agents left; never through a symlink, never more than `limit`."""
-    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
-    try:
-        if not stat.S_ISREG(os.fstat(fd).st_mode):
-            raise ValueError(f"{path} is not a regular file")
-        return os.read(fd, limit)
-    finally:
-        os.close(fd)
+    """Bytes of a regular file the agents left: never through a symlink, never blocking, never more than `limit`."""
+    return iso.read_regular(path, limit)
 
 
 def read_text(path, limit=64 << 20):

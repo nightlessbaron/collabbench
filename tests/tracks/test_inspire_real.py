@@ -18,6 +18,7 @@ from pathlib import Path
 
 import pytest
 
+from collabbench.taskfmt.frontier import isolation as iso
 from collabbench.taskfmt.localcheck import score_locally
 from collabbench.tracks.inspire import real
 from collabbench.tracks.inspire.real import cif_canon, score_recovery
@@ -50,12 +51,14 @@ def workspace_texts(d: Path) -> dict[str, str]:
 def load_score_module(d: Path):
     tests = d / "tests"
     sys.path.insert(0, str(tests))
+    bytecode, sys.dont_write_bytecode = sys.dont_write_bytecode, True  # never into a task's tests/ (M5)
     try:
         spec = importlib.util.spec_from_file_location(f"score_{d.name.replace('-', '_')}", tests / "score.py")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
     finally:
         sys.path.remove(str(tests))
+        sys.dont_write_bytecode = bytecode
     return module
 
 
@@ -185,20 +188,16 @@ def test_reference_and_start_local(task, reference):
 
 # --- gates and attribution ------------------------------------------------------------------------------------------
 
-def test_shortcuts_fail_the_gate(task, tmp_path, capsys):
+def test_shortcuts_fail_the_gate(task, tmp_path):
     """The seed's red-team shortcuts each scored 0 there. Here a shortcut may earn partial credit on what it does get
     right, but it never passes every test, never meets req_GAP, and stays well below the reference."""
     builder, d = task
     names = sorted(p.name for p in (d / "shortcuts").iterdir())
     assert names == sorted(builder.SHORTCUTS)
-    rewards = {}
     for name in names:
         r = apply_and_score(d, f'bash "$TASK/shortcuts/{name}/solve.sh"', tmp_path, name)
-        rewards[name] = round(r["reward"], 3)
         assert r["extras"]["all_pass"] == 0.0 and r["requirements"]["GAP"] is False, name
         assert r["reward"] <= 0.7, (name, r["reward"])
-    with capsys.disabled():
-        print(f"\n{d.name} shortcut rewards: {rewards}")
 
 
 def cif_variant(transform: str) -> str:
@@ -335,7 +334,22 @@ GAP_BLIND = {cif_canon.NAME: GAP_BLIND_CIF, score_recovery.NAME: score_variant(G
 NAIVE = {cif_canon.NAME: "naive_common_case", score_recovery.NAME: "naive-common-case"}
 
 
-def test_reward_is_half_the_gap(task, reference, tmp_path, capsys):
+def expected_reward(builder, d: Path, tests: dict[str, bool]) -> float:
+    """The ruling's reward, computed here from the per-test results, the builder's deliverables and the builder's own
+    gap set (not from score.py): 0.5 x the mean of the deliverables' pass rates + 0.5 x the gap tests' pass rate."""
+    def rate(oks):
+        return sum(oks) / len(oks)
+    rates = [rate([ok for name, ok in tests.items() if name.startswith(f"test_{deliverable}_")])
+             for deliverable in builder.DELIVERABLES]
+    if builder is cif_canon:
+        gap = cif_canon.gap_tests(json.loads(text(d / "tests" / "hidden" / "instances.json")))
+    else:
+        gap = score_recovery.gap_tests()
+    assert gap and gap <= set(tests)
+    return 0.5 * sum(rates) / len(rates) + 0.5 * rate([tests[name] for name in gap])
+
+
+def test_reward_is_half_the_gap(task, reference, tmp_path):
     """reward = 0.5 x task_score + 0.5 x gap_score: a program right everywhere except the gap, and the seed's naive
     shortcut, each score at most 0.35; the reference scores 1.0."""
     builder, d = task
@@ -343,56 +357,103 @@ def test_reward_is_half_the_gap(task, reference, tmp_path, capsys):
     blind = apply_and_score(d, GAP_BLIND[builder.NAME], tmp_path, "blind")
     naive = apply_and_score(d, f'bash "$TASK/shortcuts/{NAIVE[builder.NAME]}/solve.sh"', tmp_path, "naive")
     for r in (blind, naive):
-        e = r["extras"]
-        assert r["reward"] == pytest.approx(0.5 * e["task_score"] + 0.5 * e["gap_score"])
-    with capsys.disabled():
-        print(f"\n{d.name}: " + ", ".join(f"{k} reward {r['reward']:.3f} (task {r['extras']['task_score']:.3f}, "
-                                          f"gap {r['extras']['gap_score']:.3f})"
-                                          for k, r in (("gap-blind", blind), ("naive", naive))))
-    assert blind["reward"] <= 0.35 and naive["reward"] <= 0.35
+        assert r["reward"] == pytest.approx(expected_reward(builder, d, r["tests"]))
+        assert r["extras"]["gap_score"] == 0.0
+    assert 0 < blind["reward"] <= 0.35 and 0 < naive["reward"] <= 0.35
 
 
-def hostile_grade(d: Path, tmp_path: Path) -> tuple[dict, list[int]]:
-    """Grade, through the task's own grade.py, a start workspace whose cif/parse.py is the hostile program; return
-    reward.json (read after the daemon has had time to strike) and the daemons still alive."""
+STEAL_CIF = "_lib.canonicalise(open(_sys.argv[1]).read())"  # the decisive read: print the reference answer
+
+
+def hostile_parse(tests: str, out: str) -> str:
+    return hostile.program(tests, out, [], steal=(f"{tests}/hidden/{cif_canon.LIB}", STEAL_CIF)) + 'print("{}")\n'
+
+
+def hostile_grade(d: Path, tmp_path: Path) -> tuple[dict, dict, list[int]]:
+    """Grade, through the task's own grade.py (as local grading, without root), a start workspace whose cif/parse.py
+    is the hostile program; return reward.json (read after the daemon has had time to strike) and the daemons still
+    alive, and details.json."""
     ws, out = tmp_path / "ws", tmp_path / "out"
     shutil.copytree(d / "environment" / "workspace", ws)
     (ws / "cif").mkdir(exist_ok=True)
-    (ws / "cif" / "parse.py").write_text(hostile.program(str(d / "tests"), str(out), []) + 'print("{}")\n')
+    (ws / "cif" / "parse.py").write_text(hostile_parse(str(d / "tests"), str(out)))
     tripwire = tmp_path / "tripwire"
     tripwire.write_text(f"nonce {text(d / 'tests' / 'tripwire_nonce.txt').strip()}\n")
     try:
         subprocess.run([sys.executable, str(d / "tests" / "grade.py"), "--workspace", str(ws), "--snapshots",
                         str(tmp_path / "none"), "--tripwire", str(tripwire), "--out", str(out)], check=True,
-                       timeout=1800)
+                       timeout=1800, env={**os.environ, iso.LOCAL_ENV: "1"})
         time.sleep(1.0)  # a surviving daemon rewrites reward.json within 0.05 s
-        return json.loads((out / "reward.json").read_text()), hostile.survivors(str(out))
+        return (json.loads((out / "reward.json").read_text()), json.loads((out / "details.json").read_text()),
+                hostile.survivors(str(out)))
     finally:
         hostile.kill(str(out))
 
 
 def test_hostile_agent_program_cannot_change_the_grade(tmp_path):
-    """An agent program run during grading rewrites expected_tests.json and score.py and leaves a double-forked
-    daemon that overwrites reward.json. Grading must ignore the rewrite and kill the daemon before reward.json is
-    written. Without root (here) the program runs as the grader's own user, so its rewrite lands and voids the
-    grade (tests_tampered); as root it runs as tests/agent_uid and cannot touch the tests at all (the live test)."""
+    """An agent program run during grading rewrites expected_tests.json and score.py, leaves a double-forked
+    daemon that overwrites reward.json, and prints the answer of the hidden reference library. Grading must ignore
+    the rewrite and kill the daemon before reward.json is written. Without root (here, under the explicit local
+    override) the program runs as the grader's own user, so its rewrite lands and voids the whole grade: the reward,
+    every requirement and every score extra (M3), and reward.json records that it ran unisolated. As root it runs as
+    tests/agent_uid and can neither read nor touch the tests (the live test)."""
     d = tmp_path / cif_canon.NAME
     shutil.copytree(task_dir(cif_canon.NAME), d)
     pinned = text(d / "tests" / "hidden" / "expected_tests.json")
-    reward, alive = hostile_grade(d, tmp_path)
+    reward, details, alive = hostile_grade(d, tmp_path)
     assert not alive, f"agent daemons survived grading: {alive}"
     assert "pwned" not in reward and reward["reward"] <= 0.05
     if os.geteuid() == 0:
         assert text(d / "tests" / "hidden" / "expected_tests.json") == pinned and "tests_tampered" not in reward
+        assert reward["isolated"] == 1
     else:
-        assert reward["tests_tampered"] == 1 and reward["reward"] == 0.0
+        assert reward["tests_tampered"] == 1 and reward["reward"] == 0.0 and reward["isolated"] == 0
+        assert not any(v for k, v in reward.items() if k.startswith("req_"))
+        assert reward["task_score"] == reward["gap_score"] == reward["all_pass"] == 0.0
+        assert details["final"]["extras"]["rate_D1"] == 1.0  # the stolen reference answers had passed all of D1
+
+
+@pytest.fixture(params=sorted(BUILDERS))
+def shipped_harness(request):
+    return task_dir(request.param) / "tests" / "hidden" / "harness.py"
+
+
+def test_harness_reads_never_block_on_a_fifo(shipped_harness, tmp_path):
+    """I1: a program running as the agent UID can leave a FIFO where an output belongs (mkfifo out/counts.json);
+    root's read must refuse it at once instead of blocking until the verifier is killed."""
+    fifo = tmp_path / "counts.json"
+    os.mkfifo(fifo)
+    code = (f"import sys; sys.path.insert(0, {str(shipped_harness.parent)!r}); import harness as h\n"
+            f"try:\n    h.read_regular({str(fifo)!r})\nexcept (ValueError, OSError):\n    print('REFUSED')\n")
+    run = subprocess.run([sys.executable, "-I", "-B", "-c", code], capture_output=True, text=True, timeout=30)
+    assert run.stdout.strip() == "REFUSED", run.stderr[-2000:]
+
+
+def test_harness_uses_the_one_shared_isolation_module(shipped_harness):
+    """I3: the task harness keeps no sweep, lock or safe read of its own; it loads tests/isolation.py, the copy of
+    taskfmt/frontier/isolation.py that write_task ships."""
+    harness = text(shipped_harness)
+    assert text(shipped_harness.parent.parent / "isolation.py") == Path(iso.__file__).read_text()
+    assert '"isolation.py"' in harness
+    assert not any(marker in harness for marker in ("/proc", "prctl", "chown", "SIGKILL", "O_NOFOLLOW"))
+
+
+def test_score_d3_fails_on_a_symlink_under_publish(tmp_path):
+    """M4: a published tree must hold files, not links: a symlink to the internal notes fails D3 (the seed failed
+    any symlink in the agent's files; here the graded copy never holds one, and D3 says so)."""
+    d = task_dir(score_recovery.NAME)
+    script = ('bash "$TASK/solution/solve.sh"\n'
+              'ln -s ../../partner_toolkit_src/toolkit/_internal_notes.py "$WORKSPACE/publish/toolkit/_notes.py"\n')
+    r = apply_and_score(d, script, tmp_path)
+    assert "test_D3_publish_has_no_sensitive_content" in failed(r) and r["requirements"]["D3"] is False
+    assert failed(r) <= {n for n in r["tests"] if n.startswith("test_D3_")}
 
 
 @pytest.mark.live
 def test_live_hostile_agent_program_is_contained(tmp_path):
     """Live (Modal, and a verifier running as root, as Harbor runs it): the oracle agent leaves the hostile parse.py
-    in the workspace; the verifier runs it as the agent UID. It cannot write the tests or /logs/verifier, and no
-    process of it outlives its run. Costs one oracle trial."""
+    in the workspace; the verifier runs it as the agent UID. It can neither read the reference library nor write the
+    tests or /logs/verifier, and no process of it outlives its run. Costs one oracle trial."""
     from collabbench import settings
     from collabbench.runner.gates import _job, parse_trial
     from collabbench.runner.harbor import harbor_env
@@ -400,7 +461,7 @@ def test_live_hostile_agent_program_is_contained(tmp_path):
 
     d = tmp_path / cif_canon.NAME
     shutil.copytree(task_dir(cif_canon.NAME), d)
-    program = hostile.program("/tests", "/logs/verifier", []) + 'print("{}")\n'
+    program = hostile_parse("/tests", "/logs/verifier")  # also tries to read /tests/hidden/cif_ref_lib.py
     (d / "solution" / "solve.sh").write_text(
         '#!/bin/bash\nset -euo pipefail\nW="${WORKSPACE:-/workspace}"\nmkdir -p "$W/cif"\n'
         f"cat > \"$W/cif/parse.py\" <<'PY'\n{program}PY\n")
@@ -410,6 +471,7 @@ def test_live_hostile_agent_program_is_contained(tmp_path):
     trial = parse_trial(next((jobs / "hostile").glob("*/result.json")).parent)
     rewards = trial["rewards"]
     assert trial["exception"] is None and "pwned" not in rewards and rewards["reward"] <= 0.05
+    assert rewards["isolated"] == 1 and rewards["req_D1"] == 0  # the reference library could not be read
     assert not rewards.get("tests_tampered") and not rewards.get("verifier_error")
     assert rewards["agent_processes_left"] == 0 and not rewards.get("agent_processes_survived")
 
