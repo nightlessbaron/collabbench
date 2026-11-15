@@ -128,3 +128,18 @@ def test_grade_survives_crashing_score(tmp_path):
                     str(tmp_path / "none"), "--tripwire", str(tmp_path / "none"), "--out", str(out)], check=True)
     reward = json.loads((out / "reward.json").read_text())
     assert reward["reward"] == 0.0 and reward["verifier_error"] == 1
+
+
+FORGER = '''import sys
+path = next(a.split("=", 1)[1] for a in sys.argv if a.startswith("--junitxml="))
+open(path, "w").write('<testsuite><testcase name="test_R1_add"/><testcase name="test_R2_add_negative"/></testsuite>')
+'''
+
+
+def test_workspace_cannot_shadow_pytest(tmp_path):
+    d = write_task(toy_spec(), tmp_path / "t")
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    (ws / "calc.py").write_text("def add(a, b):\n    return 0\n")
+    (ws / "pytest.py").write_text(FORGER)  # a workspace file that would replace pytest itself
+    assert score_locally(d, "start", workspace=ws)["reward"] == 0.0

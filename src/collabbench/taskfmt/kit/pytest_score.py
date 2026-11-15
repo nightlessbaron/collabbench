@@ -20,14 +20,15 @@ def run_pytest(workspace: Path, hidden: Path = HIDDEN, timeout_s: int = 600) -> 
     workspace = Path(workspace).resolve()
     with tempfile.TemporaryDirectory() as tmp:
         junit = Path(tmp) / "junit.xml"
-        env = {**os.environ, "PYTHONPATH": str(workspace), "PYTHONDONTWRITEBYTECODE": "1"}
-        cmd = [sys.executable, "-m", "pytest", str(hidden), "-q", "-p", "no:cacheprovider", "--rootdir", str(hidden),
-               "-c", os.devnull, f"--junitxml={junit}", "-o", "junit_family=xunit1"]
+        # -I: no PYTHONPATH, no cwd on sys.path, no user site. hidden/conftest.py appends the workspace to sys.path.
+        env = {**os.environ, "COLLAB_WORKSPACE": str(workspace), "PYTHONDONTWRITEBYTECODE": "1"}
+        cmd = [sys.executable, "-I", "-m", "pytest", str(hidden), "-q", "-p", "no:cacheprovider", "--rootdir",
+               str(hidden), "-c", os.devnull, f"--junitxml={junit}", "-o", "junit_family=xunit1"]
         try:
-            subprocess.run(cmd, cwd=workspace, env=env, capture_output=True, timeout=timeout_s)
+            run = subprocess.run(cmd, cwd=workspace, env=env, capture_output=True, timeout=timeout_s)
         except subprocess.TimeoutExpired:
             return {"reward": 0.0, "requirements": {}, "extras": {"timeout": 1.0}}
-        if not junit.exists():
+        if run.returncode not in (0, 1) or not junit.exists():  # 0 all passed, 1 some failed; else not a scoring
             return {"reward": 0.0, "requirements": {}, "extras": {"collection_error": 1.0}}
         results = {}
         for case in ET.parse(junit).getroot().iter("testcase"):

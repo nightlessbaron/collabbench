@@ -84,6 +84,7 @@ memory_mb = {spec.memory_mb}
     _write(tests / "test.sh", (KIT / "test.sh").read_text(), 0o755)
     for kit_file in ("grade.py", "pytest_score.py"):
         _write(tests / kit_file, (KIT / kit_file).read_text())
+    _write(tests / "hidden" / "conftest.py", (KIT / "hidden_conftest.py").read_text())
     _write(tests / "score.py", spec.score_py)
     for rel, text in spec.hidden_files.items():
         _write(tests / rel, text)
