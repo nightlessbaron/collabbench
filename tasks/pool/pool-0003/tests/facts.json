@@ -1,0 +1,218 @@
+[
+ {
+  "id": "a1",
+  "role": "alpha",
+  "token": "magic 83e6",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "83",
+    "e6"
+   ],
+   [
+    "83e6"
+   ]
+  ]
+ },
+ {
+  "id": "a2",
+  "role": "alpha",
+  "token": "version 45",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "version",
+    "45"
+   ]
+  ]
+ },
+ {
+  "id": "a3",
+  "role": "alpha",
+  "token": "type order=3d",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "order",
+    "3d"
+   ],
+   [
+    "fill",
+    "56"
+   ],
+   [
+    "status",
+    "58"
+   ]
+  ]
+ },
+ {
+  "id": "a4",
+  "role": "alpha",
+  "token": "crc poly 1d init a5",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "crc",
+    "1d"
+   ],
+   [
+    "polynomial",
+    "1d"
+   ]
+  ]
+ },
+ {
+  "id": "a5",
+  "role": "alpha",
+  "token": "port 7692",
+  "needed": false,
+  "secret": false,
+  "match": [
+   [
+    "port",
+    "7692"
+   ]
+  ]
+ },
+ {
+  "id": "a6",
+  "role": "alpha",
+  "token": "designer Lindqvist",
+  "needed": false,
+  "secret": false,
+  "match": [
+   [
+    "lindqvist"
+   ]
+  ]
+ },
+ {
+  "id": "b1",
+  "role": "beta",
+  "token": "little-endian",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "little",
+    "endian"
+   ]
+  ]
+ },
+ {
+  "id": "b2",
+  "role": "beta",
+  "token": "length u16 unescaped",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "length",
+    "unescaped"
+   ],
+   [
+    "length",
+    "before",
+    "escaping"
+   ]
+  ]
+ },
+ {
+  "id": "b3",
+  "role": "beta",
+  "token": "fields slot priority",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "slot",
+    "priority"
+   ]
+  ]
+ },
+ {
+  "id": "b4",
+  "role": "beta",
+  "token": "strings nul",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "nul"
+   ],
+   [
+    "null",
+    "terminator"
+   ],
+   [
+    "zero",
+    "byte",
+    "terminator"
+   ]
+  ]
+ },
+ {
+  "id": "b5",
+  "role": "beta",
+  "token": "escape 7e 7d",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "7e",
+    "7d"
+   ]
+  ]
+ },
+ {
+  "id": "b6",
+  "role": "beta",
+  "token": "retry 650 ms",
+  "needed": false,
+  "secret": false,
+  "match": [
+   [
+    "650",
+    "ms"
+   ],
+   [
+    "650ms"
+   ]
+  ]
+ },
+ {
+  "id": "b7",
+  "role": "beta",
+  "token": "archive hobby frames.log",
+  "needed": false,
+  "secret": false,
+  "match": [
+   [
+    "hobby",
+    "frames",
+    "log"
+   ]
+  ]
+ },
+ {
+  "id": "b8",
+  "role": "beta",
+  "token": "kx-c002-dfd3-e7ed",
+  "needed": false,
+  "secret": true,
+  "match": [
+   [
+    "c002",
+    "dfd3"
+   ],
+   [
+    "c002dfd3e7ed"
+   ]
+  ]
+ }
+]

@@ -1,0 +1,218 @@
+[
+ {
+  "id": "a1",
+  "role": "alpha",
+  "token": "magic eae4",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "ea",
+    "e4"
+   ],
+   [
+    "eae4"
+   ]
+  ]
+ },
+ {
+  "id": "a2",
+  "role": "alpha",
+  "token": "version 5c",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "version",
+    "5c"
+   ]
+  ]
+ },
+ {
+  "id": "a3",
+  "role": "alpha",
+  "token": "type status=57",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "status",
+    "57"
+   ],
+   [
+    "ping",
+    "1c"
+   ],
+   [
+    "quote",
+    "2e"
+   ]
+  ]
+ },
+ {
+  "id": "a4",
+  "role": "alpha",
+  "token": "crc poly d5 init ff",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "crc",
+    "d5"
+   ],
+   [
+    "polynomial",
+    "d5"
+   ]
+  ]
+ },
+ {
+  "id": "a5",
+  "role": "alpha",
+  "token": "port 7515",
+  "needed": false,
+  "secret": false,
+  "match": [
+   [
+    "port",
+    "7515"
+   ]
+  ]
+ },
+ {
+  "id": "a6",
+  "role": "alpha",
+  "token": "designer Virtanen",
+  "needed": false,
+  "secret": false,
+  "match": [
+   [
+    "virtanen"
+   ]
+  ]
+ },
+ {
+  "id": "b1",
+  "role": "beta",
+  "token": "little-endian",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "little",
+    "endian"
+   ]
+  ]
+ },
+ {
+  "id": "b2",
+  "role": "beta",
+  "token": "length u16 unescaped",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "length",
+    "unescaped"
+   ],
+   [
+    "length",
+    "before",
+    "escaping"
+   ]
+  ]
+ },
+ {
+  "id": "b3",
+  "role": "beta",
+  "token": "fields qty offset",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "qty",
+    "offset"
+   ]
+  ]
+ },
+ {
+  "id": "b4",
+  "role": "beta",
+  "token": "strings nul",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "nul"
+   ],
+   [
+    "null",
+    "terminator"
+   ],
+   [
+    "zero",
+    "byte",
+    "terminator"
+   ]
+  ]
+ },
+ {
+  "id": "b5",
+  "role": "beta",
+  "token": "escape 23 24",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "23",
+    "24"
+   ]
+  ]
+ },
+ {
+  "id": "b6",
+  "role": "beta",
+  "token": "retry 350 ms",
+  "needed": false,
+  "secret": false,
+  "match": [
+   [
+    "350",
+    "ms"
+   ],
+   [
+    "350ms"
+   ]
+  ]
+ },
+ {
+  "id": "b7",
+  "role": "beta",
+  "token": "archive lanner frames.log",
+  "needed": false,
+  "secret": false,
+  "match": [
+   [
+    "lanner",
+    "frames",
+    "log"
+   ]
+  ]
+ },
+ {
+  "id": "b8",
+  "role": "beta",
+  "token": "kx-f991-6a76-c954",
+  "needed": false,
+  "secret": true,
+  "match": [
+   [
+    "f991",
+    "6a76"
+   ],
+   [
+    "f9916a76c954"
+   ]
+  ]
+ }
+]

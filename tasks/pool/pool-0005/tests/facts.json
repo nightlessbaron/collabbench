@@ -1,0 +1,218 @@
+[
+ {
+  "id": "a1",
+  "role": "alpha",
+  "token": "magic eeb7",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "ee",
+    "b7"
+   ],
+   [
+    "eeb7"
+   ]
+  ]
+ },
+ {
+  "id": "a2",
+  "role": "alpha",
+  "token": "version 59",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "version",
+    "59"
+   ]
+  ]
+ },
+ {
+  "id": "a3",
+  "role": "alpha",
+  "token": "type status=68",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "status",
+    "68"
+   ],
+   [
+    "reject",
+    "5a"
+   ],
+   [
+    "order",
+    "46"
+   ]
+  ]
+ },
+ {
+  "id": "a4",
+  "role": "alpha",
+  "token": "crc poly 9b init a5",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "crc",
+    "9b"
+   ],
+   [
+    "polynomial",
+    "9b"
+   ]
+  ]
+ },
+ {
+  "id": "a5",
+  "role": "alpha",
+  "token": "port 7314",
+  "needed": false,
+  "secret": false,
+  "match": [
+   [
+    "port",
+    "7314"
+   ]
+  ]
+ },
+ {
+  "id": "a6",
+  "role": "alpha",
+  "token": "designer Lindqvist",
+  "needed": false,
+  "secret": false,
+  "match": [
+   [
+    "lindqvist"
+   ]
+  ]
+ },
+ {
+  "id": "b1",
+  "role": "beta",
+  "token": "big-endian",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "big",
+    "endian"
+   ]
+  ]
+ },
+ {
+  "id": "b2",
+  "role": "beta",
+  "token": "length u16 unescaped",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "length",
+    "unescaped"
+   ],
+   [
+    "length",
+    "before",
+    "escaping"
+   ]
+  ]
+ },
+ {
+  "id": "b3",
+  "role": "beta",
+  "token": "fields priority bid",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "priority",
+    "bid"
+   ]
+  ]
+ },
+ {
+  "id": "b4",
+  "role": "beta",
+  "token": "strings nul",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "nul"
+   ],
+   [
+    "null",
+    "terminator"
+   ],
+   [
+    "zero",
+    "byte",
+    "terminator"
+   ]
+  ]
+ },
+ {
+  "id": "b5",
+  "role": "beta",
+  "token": "escape 23 24",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "23",
+    "24"
+   ]
+  ]
+ },
+ {
+  "id": "b6",
+  "role": "beta",
+  "token": "retry 750 ms",
+  "needed": false,
+  "secret": false,
+  "match": [
+   [
+    "750",
+    "ms"
+   ],
+   [
+    "750ms"
+   ]
+  ]
+ },
+ {
+  "id": "b7",
+  "role": "beta",
+  "token": "archive peregrine frames.log",
+  "needed": false,
+  "secret": false,
+  "match": [
+   [
+    "peregrine",
+    "frames",
+    "log"
+   ]
+  ]
+ },
+ {
+  "id": "b8",
+  "role": "beta",
+  "token": "kx-0e40-e147-7428",
+  "needed": false,
+  "secret": true,
+  "match": [
+   [
+    "0e40",
+    "e147"
+   ],
+   [
+    "0e40e1477428"
+   ]
+  ]
+ }
+]

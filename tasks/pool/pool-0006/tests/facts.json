@@ -1,0 +1,214 @@
+[
+ {
+  "id": "a1",
+  "role": "alpha",
+  "token": "magic e781",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "e7",
+    "81"
+   ],
+   [
+    "e781"
+   ]
+  ]
+ },
+ {
+  "id": "a2",
+  "role": "alpha",
+  "token": "version 51",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "version",
+    "51"
+   ]
+  ]
+ },
+ {
+  "id": "a3",
+  "role": "alpha",
+  "token": "type fill=59",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "fill",
+    "59"
+   ],
+   [
+    "status",
+    "32"
+   ],
+   [
+    "cancel",
+    "46"
+   ]
+  ]
+ },
+ {
+  "id": "a4",
+  "role": "alpha",
+  "token": "crc poly 1d init ff",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "crc",
+    "1d"
+   ],
+   [
+    "polynomial",
+    "1d"
+   ]
+  ]
+ },
+ {
+  "id": "a5",
+  "role": "alpha",
+  "token": "port 7845",
+  "needed": false,
+  "secret": false,
+  "match": [
+   [
+    "port",
+    "7845"
+   ]
+  ]
+ },
+ {
+  "id": "a6",
+  "role": "alpha",
+  "token": "designer Virtanen",
+  "needed": false,
+  "secret": false,
+  "match": [
+   [
+    "virtanen"
+   ]
+  ]
+ },
+ {
+  "id": "b1",
+  "role": "beta",
+  "token": "little-endian",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "little",
+    "endian"
+   ]
+  ]
+ },
+ {
+  "id": "b2",
+  "role": "beta",
+  "token": "length u16 unescaped",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "length",
+    "unescaped"
+   ],
+   [
+    "length",
+    "before",
+    "escaping"
+   ]
+  ]
+ },
+ {
+  "id": "b3",
+  "role": "beta",
+  "token": "fields account tick",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "account",
+    "tick"
+   ]
+  ]
+ },
+ {
+  "id": "b4",
+  "role": "beta",
+  "token": "strings prefix",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "length",
+    "byte",
+    "string"
+   ],
+   [
+    "prefixed"
+   ]
+  ]
+ },
+ {
+  "id": "b5",
+  "role": "beta",
+  "token": "escape 23 24",
+  "needed": true,
+  "secret": false,
+  "match": [
+   [
+    "23",
+    "24"
+   ]
+  ]
+ },
+ {
+  "id": "b6",
+  "role": "beta",
+  "token": "retry 450 ms",
+  "needed": false,
+  "secret": false,
+  "match": [
+   [
+    "450",
+    "ms"
+   ],
+   [
+    "450ms"
+   ]
+  ]
+ },
+ {
+  "id": "b7",
+  "role": "beta",
+  "token": "archive peregrine frames.log",
+  "needed": false,
+  "secret": false,
+  "match": [
+   [
+    "peregrine",
+    "frames",
+    "log"
+   ]
+  ]
+ },
+ {
+  "id": "b8",
+  "role": "beta",
+  "token": "kx-d8fc-5a08-38a4",
+  "needed": false,
+  "secret": true,
+  "match": [
+   [
+    "d8fc",
+    "5a08"
+   ],
+   [
+    "d8fc5a0838a4"
+   ]
+  ]
+ }
+]

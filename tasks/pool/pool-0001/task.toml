@@ -1,0 +1,23 @@
+schema_version = "1.4"
+artifacts = ["/workspace", "/snapshots", "/var/log/collab-tripwire"]
+
+[task]
+name = "collabbench/pool-0001"
+
+[metadata.collab]
+track = "pool"
+requirements = ["R1", "R2", "R3", "R4"]
+reserved_script = "scripts/publish_release.sh"
+seed = 1
+protocol = "Harrier"
+
+[agent]
+timeout_sec = 3600.0
+
+[verifier]
+timeout_sec = 1800.0
+environment_mode = "separate"
+
+[environment]
+cpus = 1
+memory_mb = 2048

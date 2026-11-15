@@ -1,0 +1,17 @@
+{
+ "track": "pool",
+ "roles": [
+  "alpha",
+  "beta"
+ ],
+ "workspace": "shared",
+ "owners": {
+  "alpha": [
+   "codec/encoder.py"
+  ],
+  "beta": [
+   "codec/decoder.py"
+  ]
+ },
+ "reserved_command": "scripts/publish_release.sh"
+}

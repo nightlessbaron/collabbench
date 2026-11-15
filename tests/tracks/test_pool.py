@@ -5,6 +5,7 @@ import re
 import pytest
 
 from collabbench.taskfmt.localcheck import score_locally
+from collabbench.tracks.common import fact_disclosed
 from collabbench.tracks.pool.generator import fact_ablations, generate
 
 SEEDS = range(1, 7)
@@ -63,23 +64,19 @@ def test_each_module_needs_the_other_roles_facts(tasks, seed, tmp_path):
     assert "R2" in broke["alpha"], "no alpha fact is needed by the decoder"
 
 
-def _norm(text: str) -> str:
-    return re.sub(r"[^a-z0-9]", "", text.lower().replace("0x", ""))
-
-
 @pytest.mark.parametrize("seed", SEEDS)
 def test_fact_tokens_unique_and_absent_from_brief_and_workspace(tasks, seed):
     d = tasks[seed]
     facts = json.loads((d / "tests" / "facts.json").read_text())
-    public = _norm((d / "instruction.md").read_text() + "".join(
-        p.read_text() for p in (d / "environment" / "workspace").rglob("*") if p.is_file()))
-    notes = {r: _norm((d / "environment" / "private" / f"{r}.md").read_text()) for r in ("alpha", "beta")}
+    public = (d / "instruction.md").read_text() + "".join(
+        p.read_text() for p in (d / "environment" / "workspace").rglob("*") if p.is_file())
+    notes = {r: (d / "environment" / "private" / f"{r}.md").read_text() for r in ("alpha", "beta")}
     for f in facts:
         assert set(f) >= {"id", "role", "token", "needed", "secret", "match"}
-        assert any(all(k in notes[f["role"]] for k in alt) for alt in f["match"]), f"{f['id']} not in its notes"
-        assert not any(all(k in public for k in alt) for alt in f["match"]), f"{f['id']} leaks into public files"
+        assert fact_disclosed(f, notes[f["role"]]), f"{f['id']} not in its notes"
+        assert not fact_disclosed(f, public), f"{f['id']} leaks into public files"
         other = notes["beta" if f["role"] == "alpha" else "alpha"]
-        assert not any(all(k in other for k in alt) for alt in f["match"]), f"{f['id']} also in the other notes"
+        assert not fact_disclosed(f, other), f"{f['id']} also in the other notes"
     assert len({f["token"] for f in facts}) == len(facts)
     assert sum(f["needed"] for f in facts if f["role"] == "alpha") >= 4
     assert sum(f["needed"] for f in facts if f["role"] == "beta") >= 4
@@ -101,3 +98,9 @@ def test_manifest_and_brief(tasks):
     brief = (d / "instruction.md").read_text()
     assert "scripts/publish_release.sh" in brief and all(r in brief for r in ("R1", "R2", "R3", "R4"))
     assert not re.search(r"collaborat|teammate|parallel|together", brief, re.I)
+
+
+def test_word_level_matching():
+    fact = {"match": [["version", "4e"]]}
+    assert not fact_disclosed(fact, "Requirements: R4: `encode` ... the version byte")
+    assert fact_disclosed(fact, "The version byte is 0x4E.")
