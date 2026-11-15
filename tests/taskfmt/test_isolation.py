@@ -6,6 +6,7 @@ namespace (`unshare -r -p`), where this user is root and nothing outside is visi
 
 import os
 import resource
+import stat
 from pathlib import Path
 import subprocess
 import sys
@@ -144,7 +145,52 @@ def test_preflight_records_whether_the_no_follow_layer_holds(tmp_path, monkeypat
     def following(root, parts, limit):  # a reader with no no-follow layer at all
         return Path(root, *parts).read_bytes()[:limit]
     monkeypatch.setattr(iso, "_walk_read", following)
-    assert iso.nofollow_preflight(tmp_path) == {"read_ok": 1, "nofollow_ok": 0}
+    result = iso.nofollow_preflight(tmp_path)
+    assert (result["read_ok"], result["nofollow_ok"]) == (1, 0), result
+
+
+def test_preflight_tree_is_open_to_the_uid_under_any_umask(tmp_path, monkeypatch):
+    """N-H: under umask 077 the preflight's `real/` came out 0700 root, so the helper (euid 64000) could not search
+    it, read_ok was 0, and every trial would be a verifier error. Each directory on the read path must be searchable
+    and readable by others, and the file readable, whatever the umask."""
+    real_read = iso.read_under
+
+    def checking(root, rel, *args, **kw):
+        here = Path(root)
+        assert stat.S_IMODE(here.stat().st_mode) & 0o005 == 0o005, (here, oct(here.stat().st_mode))
+        for part in rel.split("/"):
+            here = here / part
+            if here.is_symlink():
+                break
+            need = 0o005 if here.is_dir() else 0o004
+            assert stat.S_IMODE(here.stat().st_mode) & need == need, (here, oct(here.stat().st_mode))
+        return real_read(root, rel, *args, **kw)
+
+    monkeypatch.setattr(iso, "read_under", checking)
+    old = os.umask(0o077)
+    try:
+        result = iso.nofollow_preflight(tmp_path)
+    finally:
+        os.umask(old)
+    assert result["read_ok"] == 1 and result["nofollow_ok"] == 1
+
+
+@pytest.mark.parametrize("case", ["link_read_timed_out", "final_link_followed"])
+def test_preflight_counts_only_the_walks_own_refusal(tmp_path, monkeypatch, case):
+    """N-I: a timeout or any other failure reading link/f is not the walk refusing a link, so it must not report the
+    layer as holding. And a final-component link (real/flink -> f) must be refused too."""
+    real_walk = iso._walk_read
+
+    def walk(root, parts, limit):
+        if case == "link_read_timed_out" and parts[0] == "link":
+            raise ValueError("link/f: the read timed out")
+        if case == "final_link_followed" and parts[-1] == "flink":
+            return Path(root, *parts).read_bytes()[:limit]
+        return real_walk(root, parts, limit)
+
+    monkeypatch.setattr(iso, "_walk_read", walk)
+    result = iso.nofollow_preflight(tmp_path)
+    assert result["read_ok"] == 1 and result["nofollow_ok"] == 0, result
 
 
 def test_spare_uid_must_be_free():

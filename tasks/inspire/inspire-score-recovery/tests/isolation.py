@@ -33,8 +33,8 @@ A task opts in by naming a dedicated unprivileged UID in tests/agent_uid. The in
   or trace them. (One alive at the time can still change their scheduling, niceness or affinity; the waits stay
   bounded.)
 - check_spare(uid) -> the spare UID, refused when it is not free. nofollow_preflight(base, uid) -> per trial, as the
-  UID: {"read_ok", "nofollow_ok"}, whether `real/f` reads and `link/f` (link -> real, readable by the UID) is refused
-  on the platform that grades.
+  UID: {"read_ok", "nofollow_ok"}, whether `real/f` reads and the walk itself refuses `link/f` (link -> real,
+  readable by the UID) and `real/flink` (-> f) on the platform that grades. Any other failure is not a refusal.
 - give(path, uid) -> hand a fresh run directory (filled by root) and everything in it to the UID; the only chown to
   the UID there is.
 - copy_tree(src, dst, root_owned) -> the one symlink policy: the tree agent programs run from holds directories and
@@ -256,24 +256,39 @@ def hash_under(root, rel, uid: int | None = None, spare: int | None = None, limi
 
 
 def nofollow_preflight(base, uid: int | None = None) -> dict:
+    """Whether read_under's walk refuses links on this platform, checked as the UID (see read_under, layer 1). In a
+    fresh directory under `base`: `real/f`, `link -> real` (a directory the UID can read) and `real/flink -> f`.
+    `read_ok`: real/f reads. `nofollow_ok`: it reads, and the walk itself refuses both link/f ("link is not a
+    directory") and real/flink ("... is not a regular file"); a timeout or any other failure of those reads is not a
+    refusal, so it gives 0 (`unrefused` says why), never 1."""
     scratch = tempfile.mkdtemp(prefix="nofollow_", dir=base)
     try:
-        os.chmod(scratch, 0o755)
-        os.mkdir(os.path.join(scratch, "real"), 0o755)
-        with open(os.path.join(scratch, "real", "f"), "wb") as f:
+        real = os.path.join(scratch, "real")
+        os.mkdir(real)
+        with open(os.path.join(real, "f"), "wb") as f:
             f.write(b"x")
-        os.chmod(os.path.join(scratch, "real", "f"), 0o644)
-        os.symlink("real", os.path.join(scratch, "link"))  # a directory the UID can read: only no-follow refuses it
+        os.symlink("real", os.path.join(scratch, "link"))
+        os.symlink("f", os.path.join(real, "flink"))
+        for path, mode in ((scratch, 0o755), (real, 0o755), (os.path.join(real, "f"), 0o644)):
+            os.chmod(path, mode)  # whatever the umask: under 077 the UID could not search `real`, and every trial
+            # would be a verifier error
+        result = {"read_ok": 0, "nofollow_ok": 0}
         try:
-            read_ok = int(read_under(scratch, "real/f", uid=uid) == b"x")
-        except (ValueError, OSError):
-            read_ok = 0
-        try:
-            read_under(scratch, "link/f", uid=uid)
-            refused = 0
-        except (ValueError, OSError):
-            refused = 1
-        return {"read_ok": read_ok, "nofollow_ok": int(read_ok and refused)}
+            result["read_ok"] = int(read_under(scratch, "real/f", uid=uid) == b"x")
+        except (ValueError, OSError) as e:
+            result["read_error"] = str(e)[:300]
+        unrefused = {}
+        for rel, refusal in (("link/f", "link is not a directory"), ("real/flink", "real/flink is not a regular file")):
+            try:
+                read_under(scratch, rel, uid=uid)
+                unrefused[rel] = "read"
+            except (ValueError, OSError) as e:
+                if refusal not in str(e):
+                    unrefused[rel] = str(e)[:300]
+        result["nofollow_ok"] = int(bool(result["read_ok"]) and not unrefused)
+        if unrefused:
+            result["unrefused"] = unrefused
+        return result
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
 

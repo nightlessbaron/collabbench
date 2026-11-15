@@ -27,9 +27,11 @@ docstring is the full account. The layers that stop an agent program's output fr
 | `read_under` walk: lstat each component, then open and match `(st_dev, st_ino)` | holds | holds |
 | `O_NOFOLLOW` on each open | holds | not for `O_DIRECTORY` opens before gVisor f667de8e |
 
-Every trial records `nofollow_ok` in `reward.json`: `nofollow_preflight` builds `real/f` and `link -> real` in a temp
-directory and, as the agent UID, reads `real/f` (it must succeed, or the trial is a verifier error) and `link/f` (it
-must be refused). `nofollow_ok` 0 means the walk did not refuse a symlink on that platform. It does not void the
+Every trial records `nofollow_ok` in `reward.json`. `nofollow_preflight` builds `real/f`, `link -> real` and
+`real/flink -> f` in a temp directory (modes set explicitly, whatever the umask). As the agent UID it reads `real/f`,
+which must succeed or the trial is a verifier error. It then reads `link/f` and `real/flink`, which the walk itself
+must refuse. A timeout or any other failure of those two reads is not a refusal. `nofollow_ok` 0 means the walk was
+not shown to refuse a symlink on that platform (`details.json` `preflight.unrefused` says why). It does not void the
 trial, since the UID drop still bounds every read, but a gate should report it.
 
 The helpers that act as the agent UID (kill, read, hash) keep a spare real and saved UID (agent UID + 1), so agent
