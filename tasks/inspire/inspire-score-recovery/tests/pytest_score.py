@@ -19,6 +19,8 @@ _REQ = re.compile(r"test_([A-Z]+\d+)_")
 
 def run_pytest(workspace: Path, hidden: Path = HIDDEN, timeout_s: int = 600) -> dict:
     workspace = Path(workspace).resolve()
+    expected = hidden / "expected_tests.json"  # read before any agent code runs, so the run cannot rewrite it
+    pinned = json.loads(expected.read_text()) if expected.exists() else None
     with tempfile.TemporaryDirectory() as tmp:
         junit = Path(tmp) / "junit.xml"
         # -I: no PYTHONPATH, no cwd on sys.path, no user site. hidden/conftest.py appends the workspace to sys.path.
@@ -35,9 +37,8 @@ def run_pytest(workspace: Path, hidden: Path = HIDDEN, timeout_s: int = 600) -> 
         for case in ET.parse(junit).getroot().iter("testcase"):
             failed = any(child.tag in ("failure", "error", "skipped") for child in case)
             results[case.get("name", "")] = not failed
-    expected = hidden / "expected_tests.json"
-    if expected.exists():  # pinned from the reference run: a test missing from the report counts as failed
-        results = {name: results.get(name, False) for name in json.loads(expected.read_text())}
+    if pinned is not None:  # pinned from the reference run: a test missing from the report counts as failed
+        results = {name: results.get(name, False) for name in pinned}
     if not results:
         return {"reward": 0.0, "requirements": {}, "extras": {"collection_error": 1.0}}
     requirements: dict[str, bool] = {}

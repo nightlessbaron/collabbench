@@ -4,6 +4,7 @@ import pytest
 import subprocess
 import sys
 import tarfile
+import time
 import tomllib
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from harbor.models.task.config import TaskConfig
 
 from collabbench.taskfmt.localcheck import score_locally
 from collabbench.taskfmt.spec import TaskSpec, write_task
+from tests import hostile
 
 SCORE_PY = '''from pathlib import Path
 from pytest_score import run_pytest
@@ -183,3 +185,57 @@ def test_write_task_rejects_empty_workspace(tmp_path):
     # git does not track empty directories, so `COPY workspace/ /workspace/` would fail to build from a checkout
     with pytest.raises(ValueError, match="workspace_files"):
         write_task(toy_spec(workspace_files={}), tmp_path)
+
+
+HALF_RIGHT_ADD = "\ndef add(a, b):\n    return a + b if a >= 0 and b >= 0 else 0\n"  # passes R1 only
+
+
+def grade_cmd(d: Path, ws: Path, tmp_path: Path, out: Path, snapshots: Path | None = None) -> list[str]:
+    return [sys.executable, str(d / "tests" / "grade.py"), "--workspace", str(ws), "--snapshots",
+            str(snapshots or tmp_path / "none"), "--tripwire", str(tmp_path / "none"), "--out", str(out)]
+
+
+def test_expected_tests_are_read_before_agent_code_runs(tmp_path):
+    """Agent code that rewrites expected_tests.json while the hidden tests run (here: to the one test it passes)
+    does not change what is counted."""
+    d = write_task(toy_spec(), tmp_path / "t")
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    (ws / "calc.py").write_text(hostile.program(str(d / "tests"), str(tmp_path / "out"), ["test_R1_add"],
+                                                daemon=False) + HALF_RIGHT_ADD)
+    assert score_locally(d, "start", workspace=ws)["reward"] == 0.5
+    assert json.loads((d / "tests" / "hidden" / "expected_tests.json").read_text()) == ["test_R1_add"]  # it ran
+
+
+def test_grade_voids_changed_tests_and_kills_what_agent_code_leaves(tmp_path):
+    """Agent code run during grading rewrites the tests (expected_tests.json, score.py) and leaves a double-forked
+    daemon that overwrites reward.json once it appears. The changed tests void the reward, and the daemon is dead
+    before reward.json is written."""
+    d = write_task(toy_spec(), tmp_path / "t")
+    ws, out, snaps = tmp_path / "ws", tmp_path / "out", tmp_path / "snapshots"
+    ws.mkdir()
+    (ws / "calc.py").write_text(hostile.program(str(d / "tests"), str(out), ["test_R1_add"]) + HALF_RIGHT_ADD)
+    snaps.mkdir()
+    make_snapshot(ws, snaps / "0001.0-workspace.tar.gz")
+    (snaps / "index.json").write_text(json.dumps([{"file": "0001.0-workspace.tar.gz", "t": 1.0}]))
+    try:
+        subprocess.run(grade_cmd(d, ws, tmp_path, out, snaps), check=True)
+        time.sleep(1.0)  # a surviving daemon would rewrite reward.json within 0.05 s
+        assert not hostile.survivors(str(out))
+        reward = json.loads((out / "reward.json").read_text())
+        assert "pwned" not in reward and reward["reward"] == 0.0
+        assert reward["tests_tampered"] == 1 and "verifier_error" not in reward  # the agents' doing: it counts
+        trace = json.loads((out / "details.json").read_text())["trace"]  # the rewritten score.py scores nothing
+        assert [row["reward"] for row in trace] == [0.0] and trace[0]["error"] == "tests changed during grading"
+    finally:
+        hostile.kill(str(out))
+
+
+def test_grade_reports_agent_processes_when_the_task_names_an_agent_uid(tmp_path):
+    d = write_task(toy_spec(hidden_files={"hidden/test_calc.py": HIDDEN, "agent_uid": "64000\n"}), tmp_path / "t")
+    ws, out = tmp_path / "ws", tmp_path / "out"
+    ws.mkdir()
+    (ws / "calc.py").write_text("def add(a, b):\n    return a + b\n")
+    subprocess.run(grade_cmd(d, ws, tmp_path, out), check=True)
+    reward = json.loads((out / "reward.json").read_text())
+    assert reward["reward"] == 1.0 and reward["agent_processes_left"] == 0 and "tests_tampered" not in reward

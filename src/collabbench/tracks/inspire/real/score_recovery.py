@@ -90,11 +90,12 @@ def build(out: Path, seeds_root: Path = real.SEEDS_ROOT) -> Path:
         solution_sh=real.retarget((seed / "solution" / "solve.sh").read_text(), roots),
         hidden_files={"hidden/test_score_recovery.py": real.asset(SLUG, "hidden_tests.py"),
                       "hidden/harness.py": (real.ASSETS / "harness.py").read_text(),
+                      "agent_uid": f"{real.AGENT_UID}\n",
                       f"hidden/{LIB}": (seed / "tests" / LIB).read_text(),
                       "hidden/visible_corpus.json": json.dumps(visible, indent=1, sort_keys=True) + "\n"},
         score_py=real.render_score_py(list(DELIVERABLES), gap_tests(), set()),
         requirements=[*DELIVERABLES, "GAP"], reserved_script=RESERVED,
-        agent_timeout_s=7200, verifier_timeout_s=3600,
+        agent_timeout_s=14400, verifier_timeout_s=3600,
         extra_metadata={"source_task": SEED_ID, "seed_solve_rate": SEED_SOLVE_RATE, "gap_standard": GAP_STANDARD,
                         "probe": "none"})
     d = write_task(spec, out)

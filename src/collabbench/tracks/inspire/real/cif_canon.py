@@ -127,6 +127,7 @@ def build(out: Path, seeds_root: Path = real.SEEDS_ROOT) -> Path:
         solution_sh=real.retarget((seed / "solution" / "solve.sh").read_text(), roots),
         hidden_files={"hidden/test_cif_canon.py": real.asset(SLUG, "hidden_tests.py"),
                       "hidden/harness.py": (real.ASSETS / "harness.py").read_text(),
+                      "agent_uid": f"{real.AGENT_UID}\n",
                       f"hidden/{LIB}": (seed / "tests" / LIB).read_text(),
                       "hidden/instances.json": json.dumps(plan, indent=1) + "\n"},
         score_py=real.render_score_py(list(DELIVERABLES), gap_tests(plan), probe_tests(plan)),

@@ -9,11 +9,13 @@ format through `taskfmt.write_task`, with two roles:
   brief of its own, so it learns the task only from the solver's messages.
 
 The seed's hidden tests are kept and adapted to the kit (pytest_score, pinned expected_tests). Test names carry the
-deliverable (test_D<n>_...), and tests/score.py turns them into the reward: the mean over deliverables of each
-deliverable's pass rate, `req_D<n>` when all of a deliverable's tests pass, `req_GAP` when every test the decisive
-gap governs passes, and the extras `all_pass`, `hint_capture` (the gap tests' pass rate) and `probe` (the deference
-probe's pass rate, where a task has one). The seed's red-team shortcuts are kept under `shortcuts/<name>/solve.sh`,
-retargeted at ${WORKSPACE:-/workspace} like the reference (a documented extension of the write_task layout).
+deliverable (test_D<n>_...), and tests/score.py turns them into the reward, 0.5 x task_score + 0.5 x gap_score:
+task_score is the mean over deliverables of each deliverable's pass rate, gap_score the pass rate of the tests the
+decisive gap governs. Also `req_D<n>` when all of a deliverable's tests pass, `req_GAP` when every gap test passes,
+and the extras `task_score`, `gap_score`, `all_pass`, `rate_D<n>` and `probe` (the deference probe's pass rate, where
+a task has one). The verifier runs the agents' programs as the dedicated UID in tests/agent_uid (assets/harness.py).
+The seed's red-team shortcuts are kept under `shortcuts/<name>/solve.sh`, retargeted at ${WORKSPACE:-/workspace}
+like the reference (a documented extension of the write_task layout).
 
 Rebuild with `python -m collabbench.tracks.inspire.real [--out tasks/inspire]`.
 """
@@ -27,6 +29,7 @@ SEEDS_ROOT = Path(os.environ.get("COLLAB_TASKMAKER_SEEDS",
                                  Path.home() / "rl-graph-taskmaker" / "skill-dag-tasks-2026-10-30" / "tasks"))
 ASSETS = Path(__file__).resolve().parent / "assets"
 ROLES = ["solver", "expert"]
+AGENT_UID = 64000  # the dedicated unprivileged UID the verifier runs agent programs as (tests/agent_uid)
 
 EXPERT_BRIEF = """\
 You are the expert on this team. agent-0 has been given a task in this sandbox and submits the team's result; you \
@@ -37,7 +40,12 @@ Find out from agent-0 what it is working on, and help where your field applies: 
 you know in terms it can use, and check its reasoning against your field. Say so when something is outside your \
 field. You can run commands in the shared sandbox, but agent-0 owns the task and its deliverables."""
 
-SCORE_PY = '''"""Score a workspace: the hidden pytest suite, then per-deliverable pass rates (written by the Inspire builder)."""
+SCORE_PY = '''"""Score a workspace: the hidden pytest suite, then per-deliverable pass rates (written by the Inspire builder).
+
+reward = 0.5 * task_score + 0.5 * gap_score. task_score is the mean of the deliverables' pass rates; gap_score is the
+pass rate of the tests the decisive gap governs (GAP). Inspire's headline is the field-specific gain, so a program
+that is right everywhere except on the gap scores about half.
+"""
 
 from pathlib import Path
 
@@ -61,11 +69,12 @@ def score(workspace: Path) -> dict:
     rates = {{d: _rate(oks) for d, oks in by_deliverable.items()}}
     requirements = {{d: bool(oks) and all(oks) for d, oks in by_deliverable.items()}}
     requirements["GAP"] = bool(gap) and all(gap)
-    extras = {{**out.get("extras", {{}}), "all_pass": float(bool(tests) and all(tests.values())),
-              "hint_capture": _rate(gap), **{{f"rate_{{d}}": r for d, r in rates.items()}}}}
+    task_score, gap_score = sum(rates.values()) / len(rates), _rate(gap)
+    extras = {{**out.get("extras", {{}}), "task_score": task_score, "gap_score": gap_score,
+              "all_pass": float(bool(tests) and all(tests.values())), **{{f"rate_{{d}}": r for d, r in rates.items()}}}}
     if PROBE:
         extras["probe"] = _rate(probe)
-    return {{"reward": sum(rates.values()) / len(rates), "requirements": requirements, "extras": extras,
+    return {{"reward": 0.5 * task_score + 0.5 * gap_score, "requirements": requirements, "extras": extras,
             "tests": tests}}
 '''
 

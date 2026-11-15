@@ -2,7 +2,9 @@
 (release-7-cif-canonicalisation-goal-0015).
 
 The checks, tolerances and reference (cif_ref_lib.canonicalise) are the seed's. What changed for CollabBench:
-- the programs live in the workspace (cif/, topology/) and run from it;
+- the programs live in the workspace (cif/, topology/) and run from a root-owned, read-only copy of it; grading as
+  root, they run as the task's dedicated unprivileged UID (tests/agent_uid), cannot read or change the tests, and
+  nothing they start outlives the run (harness.py, as the seed's verifier did);
 - each per-deposit check is its own test, so the score gives partial credit; deposits come in families
   (instances.json, written by the builder): `mixed` is the seed's own 20 hidden deposits, and `sym`, `oblique`,
   `esd`, `occ` and `outside` are single-case families from the seed's generator, where only that case matters;

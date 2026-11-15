@@ -2,7 +2,9 @@
 (llm360-cre-score-recovery-goal-0010).
 
 The checks and the reference (crelib) are the seed's. What changed for CollabBench:
-- the programs live in the workspace and run from it, with the verifier's Python;
+- the programs live in the workspace and run from a root-owned, read-only copy of it, with the verifier's Python;
+  grading as root, they run as the task's dedicated unprivileged UID (tests/agent_uid), cannot read or change the
+  tests, and nothing they start outlives the run (harness.py, as the seed's verifier did);
 - the seed's one reader test over its 20 unseen bundles is one test per bundle, named by the bundle's family (the
   seed generator's category, seed % 5): accidentals, keys, ties, rarities, combined;
 - the delivered /workspace/out files are checked against the visible corpus as the environment shipped it

@@ -12,6 +12,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 import tomllib
 from pathlib import Path
 
@@ -20,6 +21,7 @@ import pytest
 from collabbench.taskfmt.localcheck import score_locally
 from collabbench.tracks.inspire import real
 from collabbench.tracks.inspire.real import cif_canon, score_recovery
+from tests import hostile
 
 REPO = Path(__file__).resolve().parents[2]
 BUILDERS = {b.NAME: b for b in (cif_canon, score_recovery)}
@@ -87,6 +89,7 @@ def test_two_real_tasks_in_tasks_inspire():
         assert meta["track"] == "inspire" and meta["source_task"] == builder.SEED_ID
         assert meta["requirements"] == [*builder.DELIVERABLES, "GAP"]
         assert meta["reserved_script"] == builder.RESERVED
+        assert text(d / "tests" / "agent_uid").strip() == str(real.AGENT_UID)
 
 
 def test_manifest_roles_and_private_context(task):
@@ -174,7 +177,7 @@ def test_reference_and_start_local(task, reference):
     _, d = task
     assert reference["reward"] >= 0.98, failed(reference)
     assert all(reference["requirements"].values()) and reference["extras"]["all_pass"] == 1.0
-    assert reference["extras"]["hint_capture"] == 1.0
+    assert reference["extras"]["gap_score"] == 1.0 and reference["extras"]["task_score"] == 1.0
     start = score_locally(d, "start")
     assert start["reward"] <= 0.05 and not any(start["requirements"].values())
     assert set(start["requirements"]) == {*load_score_module(d).DELIVERABLES, "GAP"}
@@ -226,7 +229,7 @@ def test_cif_gap_blind_reader_fails_exactly_the_gap(tmp_path):
     d = task_dir(cif_canon.NAME)
     r = apply_and_score(d, GAP_BLIND_CIF, tmp_path)
     gap = load_score_module(d).GAP
-    assert gap <= failed(r) and r["extras"]["hint_capture"] == 0.0
+    assert gap <= failed(r) and r["extras"]["gap_score"] == 0.0
     plan = json.loads(text(d / "tests" / "hidden" / "instances.json"))
     others = {p["id"] for p in plan if p["family"] in ("esd", "occ", "outside")}
     governed_elsewhere = {n for n in failed(r) if any(f"[{i}]" in n for i in others)}
@@ -276,9 +279,18 @@ def test_cif_probe_isolates_deference(tmp_path):
 
 
 def score_variant(rule: str) -> str:
-    """The reference with read_score.py replaced by the shipped reference reader under one of its alternative rules."""
+    """The reference with read_score.py replaced by the shipped reference reader under one of its alternative rules,
+    or under several joined by "+" (the reader's copy of crelib takes `rule` as a set)."""
     return f'''bash "$TASK/solution/solve.sh"
-cp "$TASK/tests/hidden/crelib.py" "$WORKSPACE/_crelib.py"
+"{sys.executable}" - "$TASK/tests/hidden/crelib.py" "$WORKSPACE/_crelib.py" <<'PY'
+import re
+import sys
+
+src = open(sys.argv[1]).read()
+src = re.sub(r'rule == "(\\w+)"', r'"\\1" in rule.split("+")', src)
+src = re.sub(r'rule != "(\\w+)"', r'"\\1" not in rule.split("+")', src)
+open(sys.argv[2], "w").write(src)
+PY
 cat > "$WORKSPACE/read_score.py" <<'PY'
 import json
 import os
@@ -316,6 +328,90 @@ def test_score_gap_families_are_attributed(tmp_path, family, rule):
     in_family = {n for n in gap if f"[{family}-" in n}
     assert in_family and in_family <= reader_fails
     assert not (gap - in_family) & reader_fails, sorted((gap - in_family) & reader_fails)
+
+
+GAP_BLIND_SCORE = "additive+first_key+tie_slur"  # every req_GAP family of the reader read the naive way
+GAP_BLIND = {cif_canon.NAME: GAP_BLIND_CIF, score_recovery.NAME: score_variant(GAP_BLIND_SCORE)}
+NAIVE = {cif_canon.NAME: "naive_common_case", score_recovery.NAME: "naive-common-case"}
+
+
+def test_reward_is_half_the_gap(task, reference, tmp_path, capsys):
+    """reward = 0.5 x task_score + 0.5 x gap_score: a program right everywhere except the gap, and the seed's naive
+    shortcut, each score at most 0.35; the reference scores 1.0."""
+    builder, d = task
+    assert reference["reward"] == 1.0
+    blind = apply_and_score(d, GAP_BLIND[builder.NAME], tmp_path, "blind")
+    naive = apply_and_score(d, f'bash "$TASK/shortcuts/{NAIVE[builder.NAME]}/solve.sh"', tmp_path, "naive")
+    for r in (blind, naive):
+        e = r["extras"]
+        assert r["reward"] == pytest.approx(0.5 * e["task_score"] + 0.5 * e["gap_score"])
+    with capsys.disabled():
+        print(f"\n{d.name}: " + ", ".join(f"{k} reward {r['reward']:.3f} (task {r['extras']['task_score']:.3f}, "
+                                          f"gap {r['extras']['gap_score']:.3f})"
+                                          for k, r in (("gap-blind", blind), ("naive", naive))))
+    assert blind["reward"] <= 0.35 and naive["reward"] <= 0.35
+
+
+def hostile_grade(d: Path, tmp_path: Path) -> tuple[dict, list[int]]:
+    """Grade, through the task's own grade.py, a start workspace whose cif/parse.py is the hostile program; return
+    reward.json (read after the daemon has had time to strike) and the daemons still alive."""
+    ws, out = tmp_path / "ws", tmp_path / "out"
+    shutil.copytree(d / "environment" / "workspace", ws)
+    (ws / "cif").mkdir(exist_ok=True)
+    (ws / "cif" / "parse.py").write_text(hostile.program(str(d / "tests"), str(out), []) + 'print("{}")\n')
+    tripwire = tmp_path / "tripwire"
+    tripwire.write_text(f"nonce {text(d / 'tests' / 'tripwire_nonce.txt').strip()}\n")
+    try:
+        subprocess.run([sys.executable, str(d / "tests" / "grade.py"), "--workspace", str(ws), "--snapshots",
+                        str(tmp_path / "none"), "--tripwire", str(tripwire), "--out", str(out)], check=True,
+                       timeout=1800)
+        time.sleep(1.0)  # a surviving daemon rewrites reward.json within 0.05 s
+        return json.loads((out / "reward.json").read_text()), hostile.survivors(str(out))
+    finally:
+        hostile.kill(str(out))
+
+
+def test_hostile_agent_program_cannot_change_the_grade(tmp_path):
+    """An agent program run during grading rewrites expected_tests.json and score.py and leaves a double-forked
+    daemon that overwrites reward.json. Grading must ignore the rewrite and kill the daemon before reward.json is
+    written. Without root (here) the program runs as the grader's own user, so its rewrite lands and voids the
+    grade (tests_tampered); as root it runs as tests/agent_uid and cannot touch the tests at all (the live test)."""
+    d = tmp_path / cif_canon.NAME
+    shutil.copytree(task_dir(cif_canon.NAME), d)
+    pinned = text(d / "tests" / "hidden" / "expected_tests.json")
+    reward, alive = hostile_grade(d, tmp_path)
+    assert not alive, f"agent daemons survived grading: {alive}"
+    assert "pwned" not in reward and reward["reward"] <= 0.05
+    if os.geteuid() == 0:
+        assert text(d / "tests" / "hidden" / "expected_tests.json") == pinned and "tests_tampered" not in reward
+    else:
+        assert reward["tests_tampered"] == 1 and reward["reward"] == 0.0
+
+
+@pytest.mark.live
+def test_live_hostile_agent_program_is_contained(tmp_path):
+    """Live (Modal, and a verifier running as root, as Harbor runs it): the oracle agent leaves the hostile parse.py
+    in the workspace; the verifier runs it as the agent UID. It cannot write the tests or /logs/verifier, and no
+    process of it outlives its run. Costs one oracle trial."""
+    from collabbench import settings
+    from collabbench.runner.gates import _job, parse_trial
+    from collabbench.runner.harbor import harbor_env
+    from collabbench.runner.pools import POOLS
+
+    d = tmp_path / cif_canon.NAME
+    shutil.copytree(task_dir(cif_canon.NAME), d)
+    program = hostile.program("/tests", "/logs/verifier", []) + 'print("{}")\n'
+    (d / "solution" / "solve.sh").write_text(
+        '#!/bin/bash\nset -euo pipefail\nW="${WORKSPACE:-/workspace}"\nmkdir -p "$W/cif"\n'
+        f"cat > \"$W/cif/parse.py\" <<'PY'\n{program}PY\n")
+    jobs = tmp_path / "jobs"
+    subprocess.run(_job(d, "oracle", [], jobs, "hostile"), env=harbor_env(POOLS["personal"]), cwd=settings.REPO,
+                   check=True, timeout=3600)
+    trial = parse_trial(next((jobs / "hostile").glob("*/result.json")).parent)
+    rewards = trial["rewards"]
+    assert trial["exception"] is None and "pwned" not in rewards and rewards["reward"] <= 0.05
+    assert not rewards.get("tests_tampered") and not rewards.get("verifier_error")
+    assert rewards["agent_processes_left"] == 0 and not rewards.get("agent_processes_survived")
 
 
 # --- reproducibility ------------------------------------------------------------------------------------------------

@@ -1,4 +1,9 @@
-"""Score a workspace: the hidden pytest suite, then per-deliverable pass rates (written by the Inspire builder)."""
+"""Score a workspace: the hidden pytest suite, then per-deliverable pass rates (written by the Inspire builder).
+
+reward = 0.5 * task_score + 0.5 * gap_score. task_score is the mean of the deliverables' pass rates; gap_score is the
+pass rate of the tests the decisive gap governs (GAP). Inspire's headline is the field-specific gain, so a program
+that is right everywhere except on the gap scores about half.
+"""
 
 from pathlib import Path
 
@@ -35,9 +40,10 @@ def score(workspace: Path) -> dict:
     rates = {d: _rate(oks) for d, oks in by_deliverable.items()}
     requirements = {d: bool(oks) and all(oks) for d, oks in by_deliverable.items()}
     requirements["GAP"] = bool(gap) and all(gap)
-    extras = {**out.get("extras", {}), "all_pass": float(bool(tests) and all(tests.values())),
-              "hint_capture": _rate(gap), **{f"rate_{d}": r for d, r in rates.items()}}
+    task_score, gap_score = sum(rates.values()) / len(rates), _rate(gap)
+    extras = {**out.get("extras", {}), "task_score": task_score, "gap_score": gap_score,
+              "all_pass": float(bool(tests) and all(tests.values())), **{f"rate_{d}": r for d, r in rates.items()}}
     if PROBE:
         extras["probe"] = _rate(probe)
-    return {"reward": sum(rates.values()) / len(rates), "requirements": requirements, "extras": extras,
+    return {"reward": 0.5 * task_score + 0.5 * gap_score, "requirements": requirements, "extras": extras,
             "tests": tests}
