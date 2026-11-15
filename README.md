@@ -10,18 +10,18 @@ the nodes after it, so one early mistake can spoil everything downstream, as in 
 | Graph | Domain | Nodes | Source of truth |
 |---|---|---|---|
 | `aldol` | organic chemistry (aldol reaction data and derivations) | 30 | real published data, deterministic derivations |
-| `cohort` | demography (cohort life tables) | 4 stages | real mortality tables |
+| `cohort` | demography (cohort life tables) | full graph | real mortality tables |
 | `fiscal` | US Treasury debt (auctions, stock, TIPS accrual, maturity wall) | 30 | TreasuryDirect / Fiscal Data snapshots, validated against Treasury's own published figures |
-| `poe` | software (real history of the `poethepoet` task runner, v0.33.0 to v0.45.0) | 15 units in stage 1 | the upstream pull requests and their tests |
+| `poe` | software (real history of the `poethepoet` task runner, from v0.33.0 on) | first 15 upstream changes | the upstream pull requests and their tests |
 
 Everything an agent needs (data, conventions and definitions) is in the task's workspace (`environment/workspace/docs`,
 `data`). Tests, reference outputs and the solution never enter the agent's container. Grading happens in a separate
 verifier container after the agent stops, and the agent has no network.
 
-### Stages: difficulty by depth
-Each graph is released in **4 cumulative stages**. Stage *k* contains every node up to depth level *k*, so stage 4 is
-the full graph. That turns one graph into a difficulty curve: how far down a chain of dependent steps can a model stay
-correct?
+### How the tasks were built
+Each graph was built and validated in cumulative stages by depth. The released tasks are the **full graphs** (stage 4,
+hence the `-s4` folder names). `poe-s1` is the first part of the poethepoet graph (its first 15 upstream changes); the
+full version is still being validated.
 
 ### Propagated grading
 - **Score:** each node is scored as the fraction of its checks that pass. The reward is the mean node score.
@@ -46,7 +46,7 @@ same 3M-token budget per agent. Results are added here as they finish; each row 
 | Claude Opus 5.5 | cohort-s4 | one agent | *running* | | | | |
 | Claude Opus 5.5 | cohort-s4 | team of three | *running* | | | | |
 | Claude Opus 5.5 | fiscal-s4 | one agent | *running* | | | | |
-| Claude Opus 5.5 | fiscal-s4 | team of three | *running* | | | | |
+| Claude Opus 5.5 | fiscal-s4 | team of three | **0.971** | 0.92M | 9 | 2 | R2, p6 |
 | Claude Opus 5.5 | poe-s1 | one agent | *running* | | | | |
 | Claude Opus 5.5 | poe-s1 | team of three | *running* | | | | |
 | GPT-6.1 sol (high) | aldol-s4 | one agent | **0.993** | 0.28M | 6 | 1 | R1, x2 |
@@ -59,26 +59,19 @@ same 3M-token budget per agent. Results are added here as they finish; each row 
 | GPT-6.1 sol (high) | poe-s1 | team of three | *running* | | | | |
 <!-- FRONTIER:END -->
 
-First frontier result: Opus 5.5 solves aldol S4 at 0.993 in 6 minutes, far above DeepSeek's 0.77. Its one miss is x5,
-the same check DeepSeek missed in every stage 3–4 run.
+On aldol both frontier models nearly solve the task. Opus 5.5's team lead did all the work itself; GPT-6.1 sol's team
+used all three agents and is the only run with a perfect score. Check x5 is missed by Opus and by every DeepSeek run.
 
-The calibration runs below use **DeepSeek V4.1 Flash** in our own harness, with 3 runs per cell. Cells with fewer
-than 3 finished runs are marked *running*.
+![Reward on the full graphs by model and setup](results/s4_rewards.svg)
 
-![Reward on the full stage-4 graphs by model and setup](results/s4_rewards.svg)
+**DeepSeek V4.1 Flash** (our harness; mean of 3 runs, n shown where fewer):
 
-| Graph | Condition | S1 | S2 | S3 | S4 |
-|---|---|---|---|---|---|
-| aldol | one agent, 3M tokens | 1.00 | 1.00 | 0.96 | 0.77 |
-| aldol | one agent, 6M tokens | 1.00 | 1.00 | 0.99 | 0.97 |
-| aldol | team of three (lead + 2) | 1.00 | 1.00 | 0.88 | 0.77 |
-| cohort | one agent, 3M tokens | 1.00 | 0.90 | 0.72 | 0.70 |
-| cohort | one agent, 6M tokens | 1.00 | running | running | running |
-| cohort | team of three | 0.97 | running | running | running |
-| fiscal | one agent, 3M tokens | 0.88 | 0.92 | 0.83 | 0.65 |
-| fiscal | one agent, 6M tokens | 1.00 | 1.00 | 0.97 | 0.80 |
-| fiscal | team of three | 0.94 | 0.86 | 0.73 | 0.89 |
-| poe | one agent, 3M tokens | 0.20 | | | |
+| Task | One agent, 3M tokens | One agent, 6M tokens | Team of three, 3M each |
+|---|---|---|---|
+| aldol | 0.77 | 0.97 | 0.77 |
+| cohort | 0.70 | 0.97 | running |
+| fiscal | 0.65 | 0.80 | 0.89 |
+| poe (first 15 changes) | 0.20 | 0.27 | running |
 
 Raw numbers, including each run, are in `results/deepseek_results.json`.
 
@@ -92,26 +85,19 @@ from the run logs, and every cell shows its n. It covers:
 - **Process:** uptake, critical-path ratio, redundancy, lead token share.
 - **Cost:** tokens and minutes.
 
-**Headline (DeepSeek, the 9 tasks with team runs, 3 runs per cell):**
-
-| Condition | Mean reward |
-|---|---|
-| Team of three | 0.894 |
-| One agent | 0.889 |
-| One agent, double budget | 0.970 |
-
-- The team beats double budget only on fiscal S4 (+0.09).
-- On 7 of 9 tasks the team is below the best of three independent single-agent runs.
-- Teams mostly spawn one or two "verifier" or "auditor" helpers, with little uptake of each other's work.
+**Headline (DeepSeek, 3 runs per cell):**
+- On fiscal the team beats both a single agent (0.89 vs 0.65) and a single agent with double budget (0.80).
+- On aldol the team equals a single agent (0.77) and loses to double budget (0.97).
+- DeepSeek teams mostly spawn one or two "verifier" or "auditor" helpers, with little uptake of each other's work.
 - When agents write a final report, they usually claim success even when the reward is below 1.
 - Unauthorized actions: 0 in every cell.
 
 ### Failure modes the benchmark exposes
-- **Depth breaks models.** Shallow stages are solved, but scores fall as the chain gets longer. On fiscal and aldol,
-  every single-agent run below 1.00 ran to within 5% of its token budget.
+- **Long dependent chains break models.** On the full graphs, DeepSeek's single-agent runs score 0.65–0.77, and every
+  run below 1.00 ran to within 5% of its token budget.
 - **Teams of agents do not automatically help.** On aldol the lead agent builds every node itself and spawns only
-  "reviewers"; in 2 of 3 stage-3 runs it spawned no one, and the team scores below a single agent. On fiscal the leads
-  split the building work, and on the hardest stage (S4) the team beats a single agent with double budget (0.89 vs 0.80).
+  "reviewers" (DeepSeek), or no one at all (Opus 5.5). On fiscal the DeepSeek leads split the building work, and the
+  team beats a single agent with double budget (0.89 vs 0.80).
 - **Real code is harder than it looks.** On `poe` stage 1 every run keeps all 212 regression tests green, but 2 of 3 runs
   implement none of the 5 scored upstream changes (reward 0.0).
 - **The benchmark audits itself.** When all 8 runs converged on the same "wrong" answer for one fiscal node, the cause was
@@ -141,6 +127,6 @@ untouched start state scores 0.0.
 
 ## Layout
 ```
-tasks/<graph>-s<stage>/   Harbor task folders (13 so far: aldol, cohort, fiscal S1–S4; poe S1)
-results/                  calibration results (JSON) and the depth-curve chart
+tasks/                    Harbor task folders: aldol-s4, cohort-s4, fiscal-s4 (full graphs), poe-s1 (first part)
+results/                  results (JSON), the chart, the team-metrics table and the scripts that build them
 ```
