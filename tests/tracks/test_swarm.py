@@ -1,13 +1,18 @@
+import ast
 import filecmp
+import io
 import json
+import keyword
 import re
 import shutil
 import subprocess
+import tokenize
 
 import pytest
 
 from collabbench.taskfmt.localcheck import score_locally
-from collabbench.tracks.swarm.generator import fact_ablations, generate, migrate_subset, module_names
+from collabbench.tracks.swarm.generator import fact_ablations, generate, migrate_subset, module_names, modules
+from tests.tracks.swarm_naive import line_local_migrate
 
 SEEDS = range(1, 7)
 
@@ -109,3 +114,89 @@ def test_facts_tested(tasks, seed, tmp_path):
         r = score_locally(tasks[seed], "start", workspace=ws)
         assert r["requirements"][fid] is False and r["reward"] < 1.0, f"seed {seed}: ablating {fid} passes"
         assert all(ok for k, ok in r["requirements"].items() if k.startswith("R")), f"{fid} ablation broke an R"
+
+
+# --- Task 13a: instances sized and varied past one agent's budget ---------------------------------------------------
+API = {"get", "put", "scan", "delete", "incr"}
+KEEP = API | {"ttl", "default", "key", "value", "amount", "offset", "limit", "start_after"}
+
+
+def legacy_calls(src: str) -> list[ast.Call]:
+    """Every call into legacy.storage, however the module reaches it: plain or aliased imports, imported functions,
+    a module-level client variable, or a class instantiated with the client."""
+    tree = ast.parse(src)
+    recv, fns = set(), set()
+    for node in tree.body:
+        if isinstance(node, ast.ImportFrom) and node.module == "legacy":
+            recv |= {a.asname or a.name for a in node.names if a.name == "storage"}
+        elif isinstance(node, ast.ImportFrom) and node.module == "legacy.storage":
+            fns |= {a.asname or a.name for a in node.names}
+        elif isinstance(node, ast.Import):
+            recv |= {a.asname or a.name for a in node.names if a.name == "legacy.storage"}
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and ast.unparse(node.value) in recv:
+            recv |= {ast.unparse(t) for t in node.targets}
+    given = {n.func.id for n in ast.walk(tree) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+             and any(ast.unparse(a) in recv for a in n.args)}
+    for cls in (n for n in tree.body if isinstance(n, ast.ClassDef) and n.name in given):
+        for init in (f for f in cls.body if isinstance(f, ast.FunctionDef) and f.name == "__init__"):
+            params = {a.arg for a in init.args.args}
+            for st in ast.walk(init):
+                if isinstance(st, ast.Assign) and isinstance(st.value, ast.Name) and st.value.id in params:
+                    recv |= {ast.unparse(t) for t in st.targets if ast.unparse(t).startswith("self.")}
+    calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call) and (
+        (isinstance(n.func, ast.Attribute) and n.func.attr in API and ast.unparse(n.func.value) in recv)
+        or (isinstance(n.func, ast.Name) and n.func.id in fns))]
+    return sorted(calls, key=lambda n: (n.lineno, n.col_offset))
+
+
+def call_shape(segment: str) -> str:
+    """A call site with identifiers, numbers and strings replaced by placeholders; line breaks kept."""
+    out = []
+    for tok in tokenize.generate_tokens(io.StringIO(segment).readline):
+        if tok.type == tokenize.NAME:
+            out.append(tok.string if keyword.iskeyword(tok.string) or tok.string in KEEP else "ID")
+        elif tok.type == tokenize.NUMBER:
+            out.append("N")
+        elif tok.type in (tokenize.STRING, tokenize.FSTRING_START, tokenize.FSTRING_MIDDLE, tokenize.FSTRING_END):
+            out.append("S")
+        elif tok.type == tokenize.OP:
+            out.append(tok.string)
+        elif tok.type == tokenize.NL:
+            out.append("/")
+    return " ".join(out)
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_line_local_migrator_scores_low(tasks, seed, tmp_path):
+    """A1: rewriting each legacy call line by line from MIGRATION.md alone (plus registry and changelog) must not
+    get far: the call sites need code that is not on their line."""
+    ws = tmp_path / "ws"
+    shutil.copytree(tasks[seed] / "environment" / "workspace", ws)
+    line_local_migrate(ws)
+    r = score_locally(tasks[seed], "start", workspace=ws)
+    assert r["reward"] <= 0.4, f"seed {seed}: the line-local migrator scores {r['reward']:.3f}"
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_instance_size_and_count(tasks, seed):
+    acme = tasks[seed] / "environment" / "workspace" / "acme"
+    mods = sorted(p for p in acme.glob("*.py") if p.name not in ("__init__.py", "registry.py"))
+    assert 60 <= len(mods) <= 90 and [p.stem for p in mods] == module_names(seed)
+    total = sum(p.stat().st_size for p in acme.rglob("*") if p.is_file())
+    assert 350_000 <= total <= 700_000, f"seed {seed}: acme/ is {total} bytes"
+    for p in mods:
+        assert 80 <= len(p.read_text().splitlines()) <= 200, f"{p.name}: {len(p.read_text().splitlines())} lines"
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_no_duplicate_call_shapes(tasks, seed):
+    acme = tasks[seed] / "environment" / "workspace" / "acme"
+    shapes = set()
+    for m in modules(seed):
+        src = (acme / f"{m.name}.py").read_text()
+        calls = legacy_calls(src)
+        assert calls, f"{m.name}: no legacy call found"
+        shapes.add((m.arch, tuple(call_shape(ast.get_source_segment(src, c)) for c in calls)))
+    n = len(module_names(seed))
+    assert len(shapes) >= 0.8 * n, f"seed {seed}: {len(shapes)} distinct call-site shapes for {n} modules"
