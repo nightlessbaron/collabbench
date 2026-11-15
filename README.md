@@ -53,8 +53,8 @@ same 3M-token budget per agent. Results are added here as they finish; each row 
 | GPT-6.1 sol (high) | aldol-s4 | team of three | **1.000** | 1.20M | 6 | 3 | none |
 | GPT-6.1 sol (high) | cohort-s4 | one agent | *running* | | | | |
 | GPT-6.1 sol (high) | cohort-s4 | team of three | *running* | | | | |
-| GPT-6.1 sol (high) | fiscal-s4 | one agent | *running* | | | | |
-| GPT-6.1 sol (high) | fiscal-s4 | team of three | *running* | | | | |
+| GPT-6.1 sol (high) | fiscal-s4 | one agent | **0.875** | 0.64M | 10 | 1 | R2, a8, p1, p4, p5, p6 |
+| GPT-6.1 sol (high) | fiscal-s4 | team of three | **0.878** | 1.87M | 10 | 3 | R2, a8, p1, p4, p5, p6 |
 | GPT-6.1 sol (high) | poe-s1 | one agent | *running* | | | | |
 | GPT-6.1 sol (high) | poe-s1 | team of three | *running* | | | | |
 <!-- FRONTIER:END -->
