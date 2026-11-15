@@ -36,7 +36,31 @@ correct?
 
 **Frontier models (in progress):** Claude Opus 5.5 and GPT-6.1 sol (reasoning effort high) are running on the four
 hardest tasks (aldol S4, cohort S4, fiscal S4, poe S1). Each model runs as one agent and as a team of three, with the
-same 3M-token budget per agent. Results will be added here as they finish.
+same 3M-token budget per agent. Results are added here as they finish; each row is one run.
+
+<!-- FRONTIER:START -->
+| Model | Task | Setup | Reward | Tokens | Minutes | Agents active | Checks missed |
+|---|---|---|---|---|---|---|---|
+| Claude Opus 5.5 | aldol-s4 | one agent | **0.993** | 0.39M | 6 | 1 | x5 |
+| Claude Opus 5.5 | aldol-s4 | team of three | *running* | | | | |
+| Claude Opus 5.5 | cohort-s4 | one agent | *running* | | | | |
+| Claude Opus 5.5 | cohort-s4 | team of three | *running* | | | | |
+| Claude Opus 5.5 | fiscal-s4 | one agent | *running* | | | | |
+| Claude Opus 5.5 | fiscal-s4 | team of three | *running* | | | | |
+| Claude Opus 5.5 | poe-s1 | one agent | *running* | | | | |
+| Claude Opus 5.5 | poe-s1 | team of three | *running* | | | | |
+| GPT-6.1 sol (high) | aldol-s4 | one agent | *running* | | | | |
+| GPT-6.1 sol (high) | aldol-s4 | team of three | *running* | | | | |
+| GPT-6.1 sol (high) | cohort-s4 | one agent | *running* | | | | |
+| GPT-6.1 sol (high) | cohort-s4 | team of three | *running* | | | | |
+| GPT-6.1 sol (high) | fiscal-s4 | one agent | *running* | | | | |
+| GPT-6.1 sol (high) | fiscal-s4 | team of three | *running* | | | | |
+| GPT-6.1 sol (high) | poe-s1 | one agent | *running* | | | | |
+| GPT-6.1 sol (high) | poe-s1 | team of three | *running* | | | | |
+<!-- FRONTIER:END -->
+
+First frontier result: Opus 5.5 solves aldol S4 at 0.993 in 6 minutes, far above DeepSeek's 0.77. Its one miss is x5,
+the same check DeepSeek missed in every stage 3–4 run.
 
 The calibration runs below use **DeepSeek V4.1 Flash** in our own harness, with 3 runs per cell. Cells with fewer
 than 3 finished runs are marked *running*.
