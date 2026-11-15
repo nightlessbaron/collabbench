@@ -1,0 +1,13 @@
+[tool.poe.env]
+default_greeting = "Hello"
+
+[tool.poe.tasks]
+echo.cmd = "poe_test_echo echo echo"
+echo.help = "This is ignored because it's already defined!"
+
+greet = "poe_test_echo $default_greeting"
+
+greet1 = "poe_test_echo Hoi"
+
+greet2.cmd = "poe_test_echo Hola"
+greet2.help = "Issue a greeting from the Iberian Peninsula"

@@ -1,0 +1,9 @@
+{
+ "track": "graph",
+ "roles": [
+  "lead"
+ ],
+ "workspace": "worktrees",
+ "owners": {},
+ "reserved_command": "scripts/release.sh"
+}

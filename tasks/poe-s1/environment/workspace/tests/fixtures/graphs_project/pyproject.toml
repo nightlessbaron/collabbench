@@ -1,0 +1,41 @@
+[tool.poe.tasks]
+
+greet = "poe_test_echo hello"
+
+_noop.shell = ":"
+_about = "poe_test_echo about"
+_do_setup  = "poe_test_echo here\nwe go...\n"
+
+
+  [tool.poe.tasks.think]
+  cmd = "poe_test_echo Thinking $first_thing and $subject2"
+  deps = ["_noop", "_do_setup"]
+  uses = { first_thing = "_about $subject1" }
+  args = [{ name = "subject1", positional = true }, { name = "subject2", positional = true }]
+
+  [tool.poe.tasks.deep-graph-with-args]
+  cmd  = "poe_test_echo $greeting1 and $greeting2"
+  deps = ["_do_setup", "think $subject1 $subject2"]
+  uses = { greeting1 = "greet $subject1", greeting2 = "greet $subject2"}
+  args = ["subject1", "subject2"]
+
+  [tool.poe.tasks._a1]
+  help = "Dependency 1 of task a"
+  cmd = "echo A1"
+
+  [tool.poe.tasks._a2]
+  help = "Dependency 2 of task a"
+  cmd = "echo A2"
+
+  [tool.poe.tasks.a]
+  help = "Task a"
+  expr = "'a1: ' + ${a1} + ', a2: ' + ${a2}"
+  uses = {a1 = "_a1", a2 = "_a2"}
+
+  [tool.poe.tasks.b]
+  help = "Task b"
+  cmd = "echo b"
+
+  [tool.poe.tasks.ab]
+  help = "Sequence of tasks a and b"
+  sequence = ["a", "b"]

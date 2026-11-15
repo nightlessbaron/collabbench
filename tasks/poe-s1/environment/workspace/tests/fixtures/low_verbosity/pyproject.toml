@@ -1,0 +1,5 @@
+[tool.poe]
+verbosity = -1
+
+[tool.poe.tasks]
+test = "poe_test_echo Hello there!"

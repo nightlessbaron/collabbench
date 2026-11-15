@@ -1,0 +1,133 @@
+tool.poe.tasks.show_env = "poe_test_env"
+
+tool.poe.tasks.ls_color = "poe_test_echo --color='always' \"a\"' b 'c"
+
+tool.poe.tasks.multiline_no_comments = """
+poe_test_echo   first_arg
+                second_arg
+"""
+tool.poe.tasks.multiline_with_single_last_line_comment = """
+poe_test_echo   first_arg
+                second_arg    # second arg
+"""
+
+tool.poe.tasks.multiline_with_many_comments = """
+poe_test_echo   first_arg     # first arg
+                second_arg    # second arg
+"""
+
+[tool.poe.tasks.echo]
+cmd = "poe_test_echo POE_ROOT:$POE_ROOT ${BEST_PASSWORD}, task_args:"
+help = "It says what you say"
+env = { BEST_PASSWORD = "Password1" }
+use_exec = true
+
+[tool.poe.tasks.greet]
+cmd = "poe_test_echo $formal_greeting $subject"
+args = ["formal-greeting", "subject"]
+
+[tool.poe.tasks.surfin-bird]
+cmd = "poe_test_echo $WORD is the word"
+env = { WORD = "${SOME_INPUT_VAR}" }
+
+[tool.poe.tasks.multiple-value-arg]
+cmd = "poe_test_echo \"first: ${first} second: ${second}\""
+
+[[tool.poe.tasks.multiple-value-arg.args]]
+name = "first"
+positional = true
+
+[[tool.poe.tasks.multiple-value-arg.args]]
+name = "second"
+positional = true
+multiple = true
+type = "integer"
+
+[tool.poe.tasks.meeseeks]
+cmd = """poe_test_echo "I'm Mr. Meeseeks! Look at me!" """
+capture_stdout = "${POE_PWD}/message.txt"
+
+[tool.poe.tasks.try-globs-pass]
+cmd = """poe_test_echo cmds_pro* - n*thing"""
+cwd = ".."
+
+[tool.poe.tasks.try-globs-null]
+cmd = """poe_test_echo cmds_pro* - n*thing"""
+empty_glob = "null"
+cwd = ".."
+
+[tool.poe.tasks.try-globs-fail]
+cmd = """poe_test_echo cmds_pro* - n*thing"""
+empty_glob = "fail"
+cwd = ".."
+
+[tool.poe.tasks.booleans]
+cmd = """poe_test_echo \\
+\\${non}=${non} \\${non:+plus}=${non:+plus} \\${non:-minus}=${non:-minus}\\
+\\${fal}=${fal} \\${fal:+plus}=${fal:+plus} \\${fal:-minus}=${fal:-minus}\\
+\\${tru}=${tru} \\${tru:+plus}=${tru:+plus} \\${tru:-minus}=${tru:-minus}\\
+\\${txt}=${txt} \\${txt:+plus}=${txt:+plus} \\${txt:-minus}=${txt:-minus}
+"""
+args = [
+    { name = "non", type = "boolean" },
+    { name = "tru", type = "boolean", default = true },
+    { name = "fal", type = "boolean", default = false },
+    { name = "txt", type = "boolean", default = "text" },
+]
+
+[tool.poe.tasks.int_zero_default]
+cmd = "poe_test_echo ${count}"
+args = [{ name = "count", type = "integer", default = 0 }]
+
+[tool.poe.tasks.bool_env_collision]
+cmd = "poe_test_echo ${MY_FLAG:-fallback}"
+env = { MY_FLAG = "from_config" }
+args = [{ name = "MY_FLAG", type = "boolean" }]
+
+[tool.poe.tasks.bool_env_presence]
+cmd = "python -c \"import os; print('MY_FLAG' in os.environ, repr(os.getenv('MY_FLAG')))\""
+args = [{ name = "MY_FLAG", type = "boolean", default = true }]
+
+[tool.poe.tasks.private_env_vars]
+cmd = "poe_test_env"
+env = { _secret = "hidden", _SECRET = "VISIBLE", normal = "visible" }
+
+[tool.poe.tasks.private_env_template]
+cmd = "poe_test_echo ${_secret}:${_SECRET}:${normal}"
+env = { _secret = "hidden", _SECRET = "VISIBLE", normal = "visible" }
+
+[tool.poe.tasks.private_arg]
+cmd = "poe_test_env"
+args = [
+  { name = "_flag", type = "boolean", default = true },
+  { name = "_FLAG", type = "boolean", default = true },
+]
+
+[tool.poe.tasks.multi_value_env]
+cmd = "python -c \"import os; print('items' in os.environ, repr(os.getenv('items')))\""
+args = [{ name = "items", type = "integer", multiple = true }]
+
+[tool.poe.tasks.private_arg_in_template]
+cmd = "poe_test_echo ${_flag}:${_FLAG}"
+args = [
+  { name = "_flag", type = "boolean", default = true },
+  { name = "_FLAG", type = "boolean", default = true },
+]
+
+[tool.poe.tasks.private_shorthand_arg]
+cmd = "poe_test_echo ${_secret}:${_PUBLIC}"
+args = ["_secret", "_PUBLIC"]
+
+[tool.poe.tasks.private_explicit_option]
+cmd = "poe_test_echo ${_secret}"
+args = [{ name = "_secret", options = ["--_secret"] }]
+
+[tool.poe.tasks.echo-extra-args]
+cmd = "poe_test_echo extra: $POE_EXTRA_ARGS"
+
+[tool.poe.tasks.echo-extra-args-trailing]
+cmd = "poe_test_echo before: $POE_EXTRA_ARGS :after"
+
+[tool.poe.tasks.echo-extra-args-with-named]
+cmd = "poe_test_echo ${prefix} extra: $POE_EXTRA_ARGS"
+args = [{ name = "prefix", default = "result" }]

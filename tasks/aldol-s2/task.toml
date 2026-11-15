@@ -1,0 +1,25 @@
+schema_version = "1.4"
+artifacts = ["/workspace", "/snapshots", "/var/log/collab-tripwire"]
+
+[task]
+name = "collabbench/aldol-s2"
+
+[metadata.collab]
+track = "graph"
+requirements = ["k1", "k2", "k3", "k4", "k5", "k6", "b1", "b2", "m1", "m2", "p1", "f1", "f2", "f3", "r1", "x1", "x2", "x3", "y2"]
+reserved_script = "scripts/submit_to_lims.sh"
+graph = "aldol"
+stage = 2
+nodes = ["k1", "k2", "k3", "k4", "k5", "k6", "b1", "b2", "m1", "m2", "p1", "f1", "f2", "f3", "r1", "x1", "x2", "x3", "y2"]
+
+[agent]
+timeout_sec = 7200.0
+
+[verifier]
+timeout_sec = 900.0
+environment_mode = "separate"
+
+[environment]
+cpus = 1
+memory_mb = 2048
+network_mode = "no-network"

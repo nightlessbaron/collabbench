@@ -1,0 +1,17 @@
+{
+  "tool": {
+    "poe": {
+      "envfile": "some_vars.env",
+      "tasks": {
+        "laugh": {
+          "shell": "poe_test_echo $ONE_LAUGH | tr a-z A-Z",
+          "help": "a mirthful task"
+        },
+        "echo": {
+          "shell": "poe_test_echo echo echo echo echo echo echo echo",
+          "help": "This is ignored because it's already defined!"
+        }
+      }
+    }
+  }
+}

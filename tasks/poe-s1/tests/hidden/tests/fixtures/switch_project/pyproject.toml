@@ -1,0 +1,162 @@
+
+[tool.poe.tasks.platform_dependent]
+control.expr = "override or sys.platform"
+args = [{ name = "override", default = "" }]
+
+  [[tool.poe.tasks.platform_dependent.switch]]
+  case = "win32"
+  shell = "import sys; print('You are on windows.')"
+  interpreter = "python"
+
+  [[tool.poe.tasks.platform_dependent.switch]]
+  case = "linux"
+  shell = "import sys; print('You are on linux.')"
+  interpreter = "python"
+
+  [[tool.poe.tasks.platform_dependent.switch]]
+  case = "darwin"
+  expr = "'You are on a mac.'"
+
+  [[tool.poe.tasks.platform_dependent.switch]]
+  shell = "import sys; print('Looks like you are running some exotic OS.')"
+  interpreter = "python"
+
+
+[tool.poe.tasks.var_dependent]
+control.expr = "int(${FOO_VAR}) % 2"
+
+  [[tool.poe.tasks.var_dependent.switch]]
+  case = 0 # case value is interpreted as string even if it isn't
+  expr = "f'{${FOO_VAR}} is even'"
+
+  [[tool.poe.tasks.var_dependent.switch]]
+  case = 1
+  shell = "import sys, os; print(os.environ['FOO_VAR'], 'is odd')"
+  interpreter = "python"
+
+
+[tool.poe.tasks.default_pass]
+control.cmd = "poe_test_echo nothing"
+default     = "pass"
+
+  [[tool.poe.tasks.default_pass.switch]]
+  case = "not a match"
+  shell = "import sys; print('never')"
+  interpreter = "python"
+
+
+[tool.poe.tasks.default_fail]
+control.cmd = "poe_test_echo nothing"
+default    = "fail"
+
+  [[tool.poe.tasks.default_fail.switch]]
+  case = "not a match"
+  shell = "import sys; print('never')"
+  interpreter = "python"
+
+
+[tool.poe.tasks.multivalue_case]
+control = "poe_test_echo ${WHATEVER}"
+
+  [[tool.poe.tasks.multivalue_case.switch]]
+  case = ["1","2","3","4","5"]
+  shell = "import sys; print('It is in 1-5')"
+  interpreter = "python"
+
+  [[tool.poe.tasks.multivalue_case.switch]]
+  case = "6"
+  shell = "import sys; print('It is 6')"
+  interpreter = "python"
+
+  [[tool.poe.tasks.multivalue_case.switch]]
+  shell = "import sys; print('It is not in 1-6')"
+  interpreter = "python"
+
+
+[tool.poe.tasks.switcher]
+control.expr = "42"
+
+  [[tool.poe.tasks.switcher.switch]]
+  case = "42"
+  cmd = "echo 'matched'"
+
+  [[tool.poe.tasks.switcher.switch]]
+  cmd = "echo default"
+
+[tool.poe.tasks.switcher_user]
+uses = { switched = "switcher" }
+cmd = "echo switched=$switched"
+
+
+[tool.poe.tasks.capture_out]
+control.expr   = "43"
+capture_stdout = "./out.txt"
+
+  [[tool.poe.tasks.capture_out.switch]]
+  case = "42"
+  cmd = "echo 'matched'"
+
+  [[tool.poe.tasks.capture_out.switch]]
+  cmd = "echo default"
+
+[tool.poe.tasks.booleans-cmd]
+control.cmd = "poe_test_echo ${txt:-minus}"
+args = [
+  { name = "non", type = "boolean" },
+  { name = "tru", type = "boolean", default = true },
+  { name = "fal", type = "boolean", default = false },
+  { name = "txt", type = "boolean", default = "text" },
+]
+
+  [[tool.poe.tasks.booleans-cmd.switch]]
+  case = "text"
+  cmd = """poe_test_echo case=text\\
+\\${non}=${non} \\${non:+plus}=${non:+plus} \\${non:-minus}=${non:-minus}\\
+\\${fal}=${fal} \\${fal:+plus}=${fal:+plus} \\${fal:-minus}=${fal:-minus}\\
+\\${tru}=${tru} \\${tru:+plus}=${tru:+plus} \\${tru:-minus}=${tru:-minus}\\
+\\${txt}=${txt} \\${txt:+plus}=${txt:+plus} \\${txt:-minus}=${txt:-minus}
+"""
+
+  [[tool.poe.tasks.booleans-cmd.switch]]
+  expr = """{'non':non, 'tru':tru, 'fal':fal, 'txt':txt}"""
+
+[tool.poe.tasks.echo-extra-branch]
+control.cmd = "poe_test_echo match"
+
+  [[tool.poe.tasks.echo-extra-branch.switch]]
+  case = "match"
+  cmd = "poe_test_echo matched: $POE_EXTRA_ARGS"
+
+  [[tool.poe.tasks.echo-extra-branch.switch]]
+  cmd = "poe_test_echo default: $POE_EXTRA_ARGS"
+
+[tool.poe.tasks.echo-extra-branch-trailing]
+control.cmd = "poe_test_echo match"
+
+  [[tool.poe.tasks.echo-extra-branch-trailing.switch]]
+  case = "match"
+  cmd = "poe_test_echo before: $POE_EXTRA_ARGS :after"
+
+  [[tool.poe.tasks.echo-extra-branch-trailing.switch]]
+  cmd = "poe_test_echo default: $POE_EXTRA_ARGS :after"
+
+[tool.poe.tasks.booleans-expr]
+control.expr = "tru"
+args = [
+  { name = "non", type = "boolean" },
+  { name = "tru", type = "boolean", default = true },
+  { name = "fal", type = "boolean", default = false },
+  { name = "txt", type = "boolean", default = "text" },
+]
+
+  [[tool.poe.tasks.booleans-expr.switch]]
+  case = "True"
+  expr = """{'case': True,'non':non, 'tru':tru, 'fal':fal, 'txt':txt}"""
+
+  [[tool.poe.tasks.booleans-expr.switch]]
+  cmd = """poe_test_echo \\
+\\${non}=${non} \\${non:+plus}=${non:+plus} \\${non:-minus}=${non:-minus}\\
+\\${fal}=${fal} \\${fal:+plus}=${fal:+plus} \\${fal:-minus}=${fal:-minus}\\
+\\${tru}=${tru} \\${tru:+plus}=${tru:+plus} \\${tru:-minus}=${tru:-minus}\\
+\\${txt}=${txt} \\${txt:+plus}=${txt:+plus} \\${txt:-minus}=${txt:-minus}
+"""

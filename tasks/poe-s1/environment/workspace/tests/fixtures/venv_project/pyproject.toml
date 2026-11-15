@@ -1,0 +1,9 @@
+[tool.poe.executor]
+type = "virtualenv"
+location = "myvenv"
+
+[tool.poe.tasks]
+show-version = "test_print_version"
+test-package-version.script = "scripts:test_package_version"
+test-package-exec-version.script = "scripts:test_package_exec_version"
+show-env = "poe_test_env"

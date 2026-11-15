@@ -1,0 +1,22 @@
+[project]
+name = "uv-sub-project"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.12"
+
+[tool.uv]
+
+[tool.poe.tasks.test-cwd]
+shell = """
+echo UV_RUN_RECURSION_DEPTH: $UV_RUN_RECURSION_DEPTH
+echo VIRTUAL_ENV: $VIRTUAL_ENV
+echo pwd: $(pwd)
+"""
+cwd   = "${workdir}"
+args  = [
+    { name = "workdir", positional = true }
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

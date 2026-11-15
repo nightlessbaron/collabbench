@@ -1,0 +1,69 @@
+[tool.poetry]
+name = "dummy-project"
+version = "0.1.0"
+
+description = "dummy-project"
+authors = ["Nat Noordanus <n@natn.me>"]
+
+packages = [
+  { include = "dummy_package" }
+]
+
+[tool.poetry.dependencies]
+poe_test_helpers = { path = "../packages/poe_test_helpers" }
+
+
+[tool.poe]
+env.PLANET = "EARTH"
+env.DEST = "MARS"
+
+
+[tool.poe.tasks.echo]
+cmd = "poe_test_echo POE_ROOT:$POE_ROOT ${BEST_PASSWORD}, task_args:"
+help = "It says what you say"
+env = { BEST_PASSWORD = "Password1" }
+
+
+[tool.poe.tasks]
+show_env = "poe_test_env"
+greet = { script = "dummy_package:main" }
+greet-shouty = { script = "dummy_package:main(upper=True)" }
+
+count =  { shell = "echo 1 && echo 2 && echo $(python -c 'print(1 + 2)')" }
+also_echo = { ref = "echo" }
+
+# Dotted key syntax for tasks with multiple keys specified
+sing.help = "busts some rhymes"
+sing.shell = """
+echo "this is the story";
+echo "all about how" &&      # the last line won't run
+echo "my life got flipped;
+  turned upside down" ||
+echo "bam bam baaam bam"
+"""
+
+part1 = "poe_test_echo 'Hello'"
+_part2.cmd = """poe_test_echo ${SUBJECT}! """
+_part2.env = { SUBJECT = "World" }
+composite_task.sequence = [
+  ["part1", "_part2"],
+  # wrapping in arrays means we can have different types of task in the sequence
+  [{cmd = """poe_test_echo "${SMILEY}!" """}]
+]
+# env var is inherited by subtask
+composite_task.env = { SMILEY = ":)" }
+
+also_composite_task = ["composite_task"]
+
+greet-multiple.sequence = ["dummy_package:main('Tom')", "dummy_package:main('Jerry')"]
+greet-multiple.default_item_type = "script"
+
+travel = [
+  { cmd = """poe_test_echo "from $PLANET to" """ },
+  { script = "dummy_package:print_var('DEST')" }
+]
+
+
+[build-system]
+requires = ["poetry>=0.12"]
+build-backend = "poetry.masonry.api"

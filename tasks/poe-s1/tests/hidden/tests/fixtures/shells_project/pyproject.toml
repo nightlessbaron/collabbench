@@ -1,0 +1,119 @@
+tool.poe.default_task_type = "shell"
+
+[tool.poe.tasks]
+
+count = "poe_test_echo 1 && poe_test_echo 2 && poe_test_echo $(python -c 'print(1 + 2)')"
+
+sing = """
+poe_test_echo "this is the story";
+poe_test_echo "all about how" &&      # the last line won't run
+poe_test_echo "my life got flipped;
+  turned upside down" ||
+poe_test_echo "bam bam baaam bam"
+"""
+
+  [tool.poe.tasks.greet]
+  shell = "poe_test_echo $formal_greeting $subject"
+  args = ["formal-greeting", "subject"]
+
+
+  [tool.poe.tasks.echo_sh]
+  interpreter = ["sh"]
+  shell = "poe_test_echo $0 $test_var"
+  env = { test_var =  "roflcopter"}
+
+
+  [tool.poe.tasks.echo_bash]
+  interpreter = "bash"
+  shell = "poe_test_echo $0 $test_var"
+  env = { test_var =  "roflcopter"}
+
+
+  [tool.poe.tasks.echo_pwsh]
+  interpreter = "pwsh"
+  shell = "poe_test_echo $ENV:test_var"
+  env = { test_var =  "roflcopter"}
+
+
+  [tool.poe.tasks.echo_powershell]
+  interpreter = "powershell"
+  shell = "poe_test_echo $ENV:test_var"
+  env = { test_var =  "roflcopter"}
+
+
+  [tool.poe.tasks.echo_python]
+  interpreter = "python"
+  shell = """
+  import sys, os
+
+  def run():
+      print(sys.version_info, os.environ.get("test_var"))
+
+  run()
+  """
+  env = { test_var =  "roflcopter"}
+
+  [tool.poe.tasks.multiple-value-arg]
+  shell = """
+  poe_test_echo "first: ${first} second: ${second}"
+
+  # bash treats space delimited string like array for iteration!
+  for word in $second; do
+    poe_test_echo $word
+  done
+  """
+
+    [[tool.poe.tasks.multiple-value-arg.args]]
+    name       = "first"
+    positional = true
+
+    [[tool.poe.tasks.multiple-value-arg.args]]
+    name       = "second"
+    positional = true
+    multiple   = true
+    type       = "integer"
+
+[tool.poe.tasks.booleans]
+shell = """
+poe_test_echo \\${non}=${non} \\${non:+plus}=${non:+plus} \\${non:-minus}=${non:-minus}
+poe_test_echo \\${fal}=${fal} \\${fal:+plus}=${fal:+plus} \\${fal:-minus}=${fal:-minus}
+poe_test_echo \\${tru}=${tru} \\${tru:+plus}=${tru:+plus} \\${tru:-minus}=${tru:-minus}
+poe_test_echo \\${txt}=${txt} \\${txt:+plus}=${txt:+plus} \\${txt:-minus}=${txt:-minus}
+"""
+args = [
+    { name = "non", type = "boolean" },
+    { name = "tru", type = "boolean", default = true },
+    { name = "fal", type = "boolean", default = false },
+    { name = "txt", type = "boolean", default = "text" },
+]
+
+[tool.poe.tasks.bool_env_collision]
+shell = "poe_test_echo ${MY_FLAG:-fallback}"
+env = { MY_FLAG = "from_config" }
+args = [{ name = "MY_FLAG", type = "boolean" }]
+
+[tool.poe.tasks.bool_env_presence]
+shell = "python -c \"import os; print('MY_FLAG' in os.environ, repr(os.getenv('MY_FLAG')))\""
+args = [{ name = "MY_FLAG", type = "boolean", default = true }]
+
+[tool.poe.tasks.bool_unset_semantics_sh]
+interpreter = ["sh"]
+shell = "poe_test_echo ${MY_FLAG+set}:${MY_FLAG-unset}:${MY_FLAG:-fallback}"
+args = [{ name = "MY_FLAG", type = "boolean", default = true }]
+
+[tool.poe.tasks.bool_unset_semantics_pwsh]
+interpreter = "pwsh"
+shell = """
+$present = Test-Path env:MY_FLAG
+$value = if ($present) { $env:MY_FLAG } else { "unset" }
+$fallback = if ($null -ne $env:MY_FLAG) { $env:MY_FLAG } else { "fallback" }
+poe_test_echo "$present|$value|$fallback"
+"""
+args = [{ name = "MY_FLAG", type = "boolean", default = true }]
+
+[tool.poe.tasks.echo-extra-args]
+shell = "poe_test_echo $target $POE_EXTRA_ARGS"
+args = [{ name = "target", default = "default" }]
+
+[tool.poe.tasks.echo-extra-args-no-named]
+shell = "poe_test_echo $POE_EXTRA_ARGS"

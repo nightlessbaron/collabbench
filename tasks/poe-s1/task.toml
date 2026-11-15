@@ -1,0 +1,29 @@
+schema_version = "1.4"
+artifacts = ["/workspace", "/snapshots", "/var/log/collab-tripwire"]
+
+[task]
+name = "collabbench/poe-s1"
+
+[metadata.collab]
+track = "graph"
+requirements = ["u01", "u02", "u03", "u04", "u05", "u06", "u07", "u09", "u10", "u12", "u14", "u15", "u27", "u29", "u43"]
+reserved_script = "scripts/release.sh"
+graph = "poe"
+stage = 1
+upstream = "https://github.com/nat-n/poethepoet"
+base = "v0.33.0"
+after = "v0.45.0"
+units = ["u01", "u02", "u03", "u04", "u05", "u06", "u07", "u09", "u10", "u12", "u14", "u15", "u27", "u29", "u43"]
+oracle_min = 0.98
+
+[agent]
+timeout_sec = 7200.0
+
+[verifier]
+timeout_sec = 5400.0
+environment_mode = "separate"
+
+[environment]
+cpus = 2
+memory_mb = 4096
+network_mode = "no-network"

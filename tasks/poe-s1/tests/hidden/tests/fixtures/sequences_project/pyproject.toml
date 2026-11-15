@@ -1,0 +1,158 @@
+[tool.poe.tasks]
+
+part1 = "poe_test_echo 'Hello'"
+_part2.cmd = "poe_test_echo ${SUBJECT}!"
+_part2.env = { SUBJECT = "World" }
+composite_task.sequence = [
+  "part1",
+  "_part2",
+  { cmd = """poe_test_echo "${SMILEY}!" """ },
+]
+# env var is inherited by subtask
+composite_task.env = { SMILEY = ":)" }
+
+greet-multiple.sequence = [
+  "my_package:main(environ.get('cat'))",
+  "my_package:main(environ['mouse'])",
+]
+greet-multiple.default_item_type = "script"
+greet-multiple.env = { cat = "Tom" }
+greet-multiple.args = ["mouse"]
+
+
+travel = [
+  { cmd = "poe_test_echo 'from $PLANET to'" },
+  { script = "my_package:print_var('DEST')" },
+]
+
+
+[tool.poe.tasks.say]
+cmd = "poe_test_echo ${thing}"
+args = ["thing"]
+
+[tool.poe.tasks.multiple-value-arg]
+sequence = [
+  { cmd = "poe_test_echo first: ${first}" },
+  { cmd = ' poe_test_echo second: "${second}"' },
+  { ref = "say --thing ${thing}" },
+]
+env = { thing = "Done." }
+
+[[tool.poe.tasks.multiple-value-arg.args]]
+name = "first"
+positional = true
+
+[[tool.poe.tasks.multiple-value-arg.args]]
+name = "second"
+positional = true
+multiple = true
+type = "integer"
+
+
+[tool.poe.tasks.cwd_once]
+expr = "os.getcwd()"
+imports = ["os"]
+
+[tool.poe.tasks.cwd_elsewhere]
+expr = "os.getcwd()"
+imports = ["os"]
+cwd = "${POE_ROOT}"
+
+[tool.poe.tasks.all_cwd]
+sequence = [
+  "cwd_once",
+  "cwd_elsewhere",
+  { script = "os:getcwd()", print_result = true },
+  { script = "os:getcwd()", cwd = ".", print_result = true },
+]
+cwd = "my_package"
+
+[tool.poe.tasks.setup]
+default_item_type = "cmd"
+sequence = ["./tools/poetry-ci-install.sh"]
+
+[tool.poe.tasks.sequential_parallel]
+args = [
+  { name = "d0", positional = true, default = "0" },
+  { name = "d1", positional = true, default = "50" },
+  { name = "d2", positional = true, default = "100" },
+]
+sequence = [
+  { cmd = "poe_test_echo First" },
+  [
+    { cmd = "poe_test_delayed_echo $d1 second $d1" },
+    { cmd = "poe_test_delayed_echo $d0 second $d0" },
+    { cmd = "poe_test_delayed_echo $d2 second $d2" },
+  ],
+  [
+    { cmd = "poe_test_delayed_echo $d1 third $d1" },
+    { cmd = "poe_test_delayed_echo $d0 third $d0" },
+    { cmd = "poe_test_delayed_echo $d2 third $d2" },
+  ],
+  { cmd = "poe_test_echo Last" },
+]
+
+[tool.poe.tasks.booleans]
+args = [
+  { name = "non", type = "boolean" },
+  { name = "tru", type = "boolean", default = true },
+  { name = "fal", type = "boolean", default = false },
+  { name = "txt", type = "boolean", default = "text" },
+]
+sequence = [
+  { cmd = """poe_test_echo \\
+\\${non}=${non} \\${non:+plus}=${non:+plus} \\${non:-minus}=${non:-minus}\\
+\\${fal}=${fal} \\${fal:+plus}=${fal:+plus} \\${fal:-minus}=${fal:-minus}\\
+\\${tru}=${tru} \\${tru:+plus}=${tru:+plus} \\${tru:-minus}=${tru:-minus}\\
+\\${txt}=${txt} \\${txt:+plus}=${txt:+plus} \\${txt:-minus}=${txt:-minus}
+""" },
+  { shell = """
+poe_test_echo \\${non}=${non} \\${non:+plus}=${non:+plus} \\${non:-minus}=${non:-minus}
+poe_test_echo \\${fal}=${fal} \\${fal:+plus}=${fal:+plus} \\${fal:-minus}=${fal:-minus}
+poe_test_echo \\${tru}=${tru} \\${tru:+plus}=${tru:+plus} \\${tru:-minus}=${tru:-minus}
+poe_test_echo \\${txt}=${txt} \\${txt:+plus}=${txt:+plus} \\${txt:-minus}=${txt:-minus}
+""" },
+  { expr = "{'non':non, 'tru':tru, 'fal':fal, 'txt':txt}" },
+]
+
+[tool.poe.tasks.private_inherited]
+env = { _secret = "hidden", normal = "visible" }
+sequence = [
+  { cmd = "poe_test_env" },
+]
+
+[tool.poe.tasks.private_env_remapped]
+env = { _secret = "hidden" }
+sequence = [
+  { cmd = "poe_test_env", env = { public = "${_secret}" } },
+]
+
+[tool.poe.tasks.private_arg_inherited]
+args = [
+  { name = "_secret", default = "hidden" },
+  { name = "public", default = "visible" },
+]
+sequence = [
+  { cmd = "poe_test_env" },
+]
+
+[tool.poe.tasks.private_arg_remapped]
+args = [{ name = "_secret", default = "hidden" }]
+sequence = [
+  { cmd = "poe_test_env", env = { public = "${_secret}" } },
+]
+
+[tool.poe.tasks.echo-args]
+cmd = "poe_test_echo $POE_EXTRA_ARGS"
+
+[tool.poe.tasks.extra-args-via-ref]
+sequence = ["echo-args $POE_EXTRA_ARGS", "say --thing done"]
+
+[tool.poe.tasks.extra-args-trailing]
+sequence = ["echo-args before $POE_EXTRA_ARGS after", "say --thing done"]
+
+[tool.poe.tasks.extra-args-via-env]
+sequence = [
+  { cmd = "poe_test_echo ${POE_EXTRA_ARGS}" },
+  "say --thing done",
+]
