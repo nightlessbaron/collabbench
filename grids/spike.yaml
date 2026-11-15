@@ -1,0 +1,11 @@
+# Task 11 spike: one Pool instance, one solo (matched budget) and one team run, on the personal Modal pool.
+pool: personal
+model: deepseek-v4-1-flash-1017
+effort: high
+concurrency: 2
+root: ..
+tracks:
+  pool:
+    budget: 400000
+    instances: [tasks/pool/pool-0001]
+    conditions: {solo_2B: 1, team: 1}
