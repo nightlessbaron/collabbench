@@ -38,8 +38,9 @@ def trials(runs: Path):
                             last_t = max(last_t, e.get("t") or 0.0)
                             agents.add(e.get("agent"))
                     miss = sorted(k[4:] for k, v in rw.items() if k.startswith("req_") and not v)
+                    nreq = sum(1 for k in rw if k.startswith("req_"))
                     yield label, task, cond, {"r": rw.get("reward"), "tok": tok, "min": last_t / 60,
-                                              "agents": len(agents - {None}), "miss": miss}
+                                              "agents": len(agents - {None}), "miss": miss, "nreq": nreq}
 
 
 def main():
@@ -47,17 +48,18 @@ def main():
     cells = {}
     for label, task, cond, x in trials(runs):
         cells.setdefault((label, task, cond), []).append(x)
-    rows = ["| Model | Task | Setup | Reward | Tokens | Minutes | Agents active | Checks missed |", "|---|---|---|---|---|---|---|---|"]
+    rows = ["| Model | Task | Setup | Reward | All nodes correct? | Tokens | Minutes | Agents active | Nodes not fully correct |", "|---|---|---|---|---|---|---|---|---|"]
     for label in MODELS.values():
         for task in TASKS:
             for cond, cname in COND.items():
                 for x in cells.get((label, task, cond), []):
                     if x is None:
-                        rows.append(f"| {label} | {task} | {cname} | *running* | | | | |")
+                        rows.append(f"| {label} | {task} | {cname} | *running* | | | | | |")
                     else:
                         r = "error" if x["r"] is None else f"{x['r']:.3f}"
-                        rows.append(f"| {label} | {task} | {cname} | **{r}** | {x['tok']/1e6:.2f}M | {x['min']:.0f} | "
-                                    f"{x['agents']} | {', '.join(x['miss']) or 'none'} |")
+                        ok = "yes" if not x["miss"] and x["nreq"] else "no"
+                        rows.append(f"| {label} | {task} | {cname} | **{r}** | {ok} | {x['tok']/1e6:.2f}M | {x['min']:.0f} | "
+                                    f"{x['agents']} | {len(x['miss'])} of {x['nreq']}: {', '.join(x['miss']) or 'none'} |")
     block = f"{START}\n" + "\n".join(rows) + f"\n{END}"
     text = readme.read_text()
     if START in text:

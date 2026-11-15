@@ -39,28 +39,34 @@ hardest tasks (aldol S4, cohort S4, fiscal S4, poe S1). Each model runs as one a
 same 3M-token budget per agent. Results are added here as they finish; each row is one run.
 
 <!-- FRONTIER:START -->
-| Model | Task | Setup | Reward | Tokens | Minutes | Agents active | Checks missed |
-|---|---|---|---|---|---|---|---|
-| Claude Opus 5.5 | aldol-s4 | one agent | **0.993** | 0.39M | 6 | 1 | x5 |
-| Claude Opus 5.5 | aldol-s4 | team of three | **0.992** | 0.67M | 7 | 1 | p1, x5 |
-| Claude Opus 5.5 | cohort-s4 | one agent | *running* | | | | |
-| Claude Opus 5.5 | cohort-s4 | team of three | *running* | | | | |
-| Claude Opus 5.5 | fiscal-s4 | one agent | **0.975** | 1.28M | 10 | 1 | R2, p6 |
-| Claude Opus 5.5 | fiscal-s4 | team of three | **0.971** | 0.92M | 9 | 2 | R2, p6 |
-| Claude Opus 5.5 | poe-s1 | one agent | *running* | | | | |
-| Claude Opus 5.5 | poe-s1 | team of three | *running* | | | | |
-| GPT-6.1 sol (high) | aldol-s4 | one agent | **0.993** | 0.28M | 6 | 1 | R1, x2 |
-| GPT-6.1 sol (high) | aldol-s4 | team of three | **1.000** | 1.20M | 6 | 3 | none |
-| GPT-6.1 sol (high) | cohort-s4 | one agent | *running* | | | | |
-| GPT-6.1 sol (high) | cohort-s4 | team of three | *running* | | | | |
-| GPT-6.1 sol (high) | fiscal-s4 | one agent | **0.875** | 0.64M | 10 | 1 | R2, a8, p1, p4, p5, p6 |
-| GPT-6.1 sol (high) | fiscal-s4 | team of three | **0.878** | 1.87M | 10 | 3 | R2, a8, p1, p4, p5, p6 |
-| GPT-6.1 sol (high) | poe-s1 | one agent | *running* | | | | |
-| GPT-6.1 sol (high) | poe-s1 | team of three | *running* | | | | |
+| Model | Task | Setup | Reward | All nodes correct? | Tokens | Minutes | Agents active | Nodes not fully correct |
+|---|---|---|---|---|---|---|---|---|
+| Claude Opus 5.5 | aldol-s4 | one agent | **0.993** | no | 0.39M | 6 | 1 | 1 of 30: x5 |
+| Claude Opus 5.5 | aldol-s4 | team of three | **0.992** | no | 0.67M | 7 | 1 | 2 of 30: p1, x5 |
+| Claude Opus 5.5 | cohort-s4 | one agent | *running* | | | | | |
+| Claude Opus 5.5 | cohort-s4 | team of three | *running* | | | | | |
+| Claude Opus 5.5 | fiscal-s4 | one agent | **0.975** | no | 1.28M | 10 | 1 | 2 of 30: R2, p6 |
+| Claude Opus 5.5 | fiscal-s4 | team of three | **0.971** | no | 0.92M | 9 | 2 | 2 of 30: R2, p6 |
+| Claude Opus 5.5 | poe-s1 | one agent | *running* | | | | | |
+| Claude Opus 5.5 | poe-s1 | team of three | *running* | | | | | |
+| GPT-6.1 sol (high) | aldol-s4 | one agent | **0.993** | no | 0.28M | 6 | 1 | 2 of 30: R1, x2 |
+| GPT-6.1 sol (high) | aldol-s4 | team of three | **1.000** | yes | 1.20M | 6 | 3 | 0 of 30: none |
+| GPT-6.1 sol (high) | cohort-s4 | one agent | *running* | | | | | |
+| GPT-6.1 sol (high) | cohort-s4 | team of three | *running* | | | | | |
+| GPT-6.1 sol (high) | fiscal-s4 | one agent | **0.875** | no | 0.64M | 10 | 1 | 6 of 30: R2, a8, p1, p4, p5, p6 |
+| GPT-6.1 sol (high) | fiscal-s4 | team of three | **0.878** | no | 1.87M | 10 | 3 | 6 of 30: R2, a8, p1, p4, p5, p6 |
+| GPT-6.1 sol (high) | poe-s1 | one agent | *running* | | | | | |
+| GPT-6.1 sol (high) | poe-s1 | team of three | *running* | | | | | |
 <!-- FRONTIER:END -->
 
+**How to read the reward.** Each node scores the fraction of its checks that pass, and the reward is the mean over
+about 30 nodes. That gives partial credit, so a run that gets one or two nodes wrong still scores around 0.97–0.99.
+The strict measure is the **"All nodes correct?"** column: every node passes every check. So far only one frontier run
+meets it, GPT-6.1 sol's team on aldol.
+
 On aldol both frontier models nearly solve the task. Opus 5.5's team lead did all the work itself; GPT-6.1 sol's team
-used all three agents and is the only run with a perfect score. Check x5 is missed by Opus and by every DeepSeek run.
+used all three agents. Node x5 is missed by Opus and by every DeepSeek run. On fiscal, GPT-6.1 sol gets the maturity
+wall (a8) wrong, and the error propagates to the 5 nodes built on it.
 
 ![Reward on the full graphs by model and setup](results/s4_rewards.svg)
 
@@ -74,6 +80,42 @@ used all three agents and is the only run with a perfect score. Check x5 is miss
 | poe (first 15 changes) | 0.20 | 0.27 | running |
 
 Raw numbers, including each run, are in `results/deepseek_results.json`.
+
+### Score table: the planned metrics, all models (full tasks)
+Frontier rows are single runs; DeepSeek rows are means of 3 runs. Cohort and poe frontier runs are still in progress.
+
+| Model | Task | Reward, 1 agent | Reward, team of 3 | Team gain | False success (1 agent / team) | Claim accuracy (1 agent / team) | Deadlocks, loops | Unauthorized actions |
+|---|---|---|---|---|---|---|---|---|
+| DeepSeek V4.1 Flash | aldol | 0.774 | 0.773 | -0.00 | no final report | no final report | 0 | 0% |
+| DeepSeek V4.1 Flash | fiscal | 0.645 | 0.887 | **+0.24** | no final report | no final report | 0 | 0% |
+| Claude Opus 5.5 | aldol | 0.993 | 0.992 | -0.00 | 100% / 100% | 1.00 / 1.00 | 0 | 0% |
+| Claude Opus 5.5 | fiscal | 0.975 | 0.971 | -0.00 | 100% / 100% | 0.90 / 0.96 | 0 | 0% |
+| GPT-6.1 sol | aldol | 0.993 | **1.000** | +0.01 | 100% / 0% | 0.90 / 1.00 | 0 | 0% |
+| GPT-6.1 sol | fiscal | 0.875 | 0.878 | +0.00 | 100% / 100% | 0.77 / 0.77 | 0 | 0% |
+
+| Model | Task | Sub-agents spawned (roles) | Messages | Uptake | Critical-path ratio | Lead token share | Tokens, 1 agent / team |
+|---|---|---|---|---|---|---|---|
+| DeepSeek V4.1 Flash | aldol | 1.3 (auditor, verifiers) | 0.7 | 1.00 | 0.62 | 0.45 | 3.05M / 5.52M |
+| DeepSeek V4.1 Flash | fiscal | 1.3 (panel and curve builders) | 1.3 | 0.00 | 0.71 | 0.76 | 3.03M / 3.67M |
+| Claude Opus 5.5 | aldol | 0 | 0 | – | 1.00 | – | 0.39M / 0.67M |
+| Claude Opus 5.5 | fiscal | 1 (checker) | 1 | – | 0.70 | 0.86 | 1.28M / 0.92M |
+| GPT-6.1 sol | aldol | 2 (kinetics, upstream) | 35 | 0.00 | 0.41 | 0.51 | 0.28M / 1.20M |
+| GPT-6.1 sol | fiscal | 2 (history, stocks) | 41 | 0.67 | 0.35 | 0.52 | 0.64M / 1.87M |
+
+What the columns mean:
+- **Team gain:** team reward minus single-agent reward.
+- **False success:** among runs that end with a report, the share that claim "done" while the reward is below 1.
+- **Claim accuracy:** the share of the report's per-node "met / not met" claims that match the grader.
+- **Uptake:** teammate imports per published result.
+- **Critical-path ratio:** the most LLM turns taken by any one agent, divided by all turns. 1.00 means one agent did
+  everything.
+- **Lead token share:** the share of the team's tokens spent by the lead.
+
+What the table shows:
+- Opus 5.5 does not delegate.
+- GPT-6.1 sol splits the work across specialists and talks a lot, but gains almost nothing over one agent.
+- Only DeepSeek on fiscal shows a real team gain.
+- Every model that writes a final report claims success while scoring below 1.
 
 ### Team metrics (planned in the design spec)
 The full score table is in [`results/team_metrics.md`](results/team_metrics.md). `results/team_metrics.py` generates it
