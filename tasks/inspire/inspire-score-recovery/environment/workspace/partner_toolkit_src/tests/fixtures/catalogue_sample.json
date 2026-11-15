@@ -1,0 +1,8 @@
+{
+  "_marker": "LICENSED-FIXTURE",
+  "_source": "third-party catalogue, licensed for testing only; do not redistribute",
+  "titles": [
+    {"work_id": "fix-001", "title": "Aurora Suite", "publisher": "Alder Editions"},
+    {"work_id": "fix-002", "title": "Bellwether March", "publisher": "Tamsin Music"}
+  ]
+}

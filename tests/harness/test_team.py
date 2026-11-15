@@ -78,6 +78,33 @@ async def test_placebo_replaces_role_text(tmp_path):
                    TeamSettings(team_size=2, placebo="beta"))
 
 
+def first_user_message(team, agent: str) -> str:
+    """The opening brief an agent received (checked after the run: a failing check inside a scripted step is
+    swallowed by the agent loop, so it cannot fail the test)."""
+    return team.outcomes[agent].transcript[1]["content"]
+
+
+@pytest.mark.parametrize("placebo", [None, "beta"])
+async def test_role_brief_replaces_the_instruction_for_that_role(tmp_path, placebo):
+    """A manifest's role_briefs give a non-reporting role its own brief instead of the task instruction (Inspire's
+    expert learns the task only from its teammate); agent-0 reports and always gets the instruction."""
+    done = finish_if(lambda m: None)
+    _, team, _ = await run_team(tmp_path, {"agent-0": [done], "agent-1": [done]},
+                                TeamSettings(team_size=2, placebo=placebo), private(role_briefs={"beta": "BETA BRIEF"}))
+    solver, expert = first_user_message(team, "agent-0"), first_user_message(team, "agent-1")
+    assert BRIEF in solver and "BETA BRIEF" not in solver and "beta" not in solver
+    notes, other = ("beta placebo notes", "beta secret") if placebo else ("beta secret notes", "beta placebo")
+    assert expert.startswith("BETA BRIEF") and notes in expert and other not in expert and BRIEF not in expert
+
+
+async def test_role_brief_never_replaces_the_solo_instruction(tmp_path):
+    _, team, _ = await run_team(tmp_path, {"agent-0": [finish_if(lambda m: None)]},
+                                TeamSettings(team_size=1, facts="shared"),
+                                private(role_briefs={"alpha": "ALPHA BRIEF", "beta": "BETA BRIEF"}))
+    solo = first_user_message(team, "agent-0")
+    assert BRIEF in solo and "ALPHA BRIEF" not in solo and "BETA BRIEF" not in solo and "## Notes from beta" in solo
+
+
 async def test_lead_spawn_creates_worktree_and_hides_brief(tmp_path):
     def w1_first(msgs):
         assert msgs[1]["content"] == "Migrate module A." and BRIEF not in json.dumps(msgs)

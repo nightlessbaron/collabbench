@@ -1,0 +1,67 @@
+{
+  "notes": [
+    {
+      "staff": 0,
+      "voice": 0,
+      "onset": "0",
+      "duration": "1",
+      "midi": 69,
+      "tie_group": null
+    },
+    {
+      "staff": 0,
+      "voice": 0,
+      "onset": "1",
+      "duration": "1",
+      "midi": 72,
+      "tie_group": null
+    },
+    {
+      "staff": 0,
+      "voice": 0,
+      "onset": "2",
+      "duration": "1",
+      "midi": 69,
+      "tie_group": null
+    },
+    {
+      "staff": 0,
+      "voice": 0,
+      "onset": "3",
+      "duration": "1",
+      "midi": 76,
+      "tie_group": null
+    },
+    {
+      "staff": 0,
+      "voice": 0,
+      "onset": "4",
+      "duration": "2",
+      "midi": 71,
+      "tie_group": null
+    },
+    {
+      "staff": 0,
+      "voice": 0,
+      "onset": "6",
+      "duration": "1",
+      "midi": 71,
+      "tie_group": null
+    },
+    {
+      "staff": 0,
+      "voice": 0,
+      "onset": "7",
+      "duration": "1",
+      "midi": 74,
+      "tie_group": null
+    }
+  ],
+  "key_regions": [
+    {
+      "start_measure": 1,
+      "fifths": 0,
+      "mode": "major"
+    }
+  ]
+}

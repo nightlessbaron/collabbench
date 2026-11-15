@@ -1,0 +1,23 @@
+data_dep_0002
+_chemical_formula_sum 'C H6 N O'
+_cell_length_a 8.400000
+_cell_length_b 9.100000
+_cell_length_c 10.200000
+_cell_angle_alpha 90.000000
+_cell_angle_beta 90.000000
+_cell_angle_gamma 90.000000
+_space_group_IT_number 1
+loop_
+_space_group_symop_operation_xyz
+  'x,y,z'
+loop_
+_atom_site_label
+_atom_site_type_symbol
+_atom_site_fract_x
+_atom_site_fract_y
+_atom_site_fract_z
+_atom_site_occupancy
+_atom_site_disorder_group
+  N1 N 0.100000 0.100000 0.100000 1.0000 .
+  O1 O 0.200000 0.150000 0.050000 1.0000 .
+  C1 C 0.700000 0.700000 0.700000 1.0000 .

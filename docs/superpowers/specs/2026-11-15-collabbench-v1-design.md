@@ -185,10 +185,12 @@ score trace for overrun and time-to-score without extra sandboxes.
 The agent receives only the instruction, so each role's private context is baked into the image at
 `/opt/collab/private/<role>.md` (plus `<role>.placebo.md` where the track has placebos and `_harness/` for
 harness-only data). `_harness/manifest.json` tells the harness what it cannot learn from the instruction: the roles
-in order, the default workspace mode, file owners for the isolated mode, the reserved command, and Inspire's training
-simulator parameters. In `setup`, the harness reads that directory with `download_dir` and deletes it from the sandbox
-before any agent runs. Roles map to agents in order: role 0 to agent 0, and so on. Agents are named neutrally
-(`agent-0`, `agent-1`; in lead topology `lead` and the names it gives), never by role.
+in order, the default workspace mode, file owners for the isolated mode, the reserved command, Inspire's training
+simulator parameters, and optional `role_briefs`: a brief that replaces the instruction for a named role other than
+agent 0's (the hand-built Inspire tasks give their expert one, so it learns the task only from the solver). In
+`setup`, the harness reads that directory with `download_dir` and deletes it from the sandbox before any agent runs.
+Roles map to agents in order: role 0 to agent 0, and so on. Agents are named neutrally (`agent-0`, `agent-1`; in lead
+topology `lead` and the names it gives), never by role.
 
 ## 7. Task format and tracks
 

@@ -1,0 +1,17 @@
+{
+  "bundle_version": 1,
+  "titles": [
+    {"work_id": "wrk-001", "title": "Aurora Suite", "publisher": "Alder Editions"},
+    {"work_id": "wrk-002", "title": "Bellwether March", "publisher": "Tamsin Music"},
+    {"work_id": "wrk-003", "title": "Cinder Waltz", "publisher": "Peverell Press"},
+    {"work_id": "wrk-004", "title": "Dapplewood Hymn", "publisher": "Quillon House"},
+    {"work_id": "wrk-005", "title": "Emberlight Prelude", "publisher": "Alder Editions"},
+    {"work_id": "emb-001", "title": "Hollow Vale Ballad", "publisher": "Marchetti & Co", "embargoed": true},
+    {"work_id": "emb-002", "title": "Glass Harbor Air", "publisher": "Peverell Press", "embargoed": true}
+  ],
+  "publisher_terms": [
+    {"publisher": "Alder Editions", "licence_rate": "0.0125 per stream", "per_publisher_licence": "CR-2019-0042"},
+    {"publisher": "Tamsin Music", "licence_rate": "0.0090 per stream", "per_publisher_licence": "CR-2020-0117"},
+    {"publisher": "Peverell Press", "licence_rate": "0.0140 per stream", "per_publisher_licence": "CR-2021-0033"}
+  ]
+}

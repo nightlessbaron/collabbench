@@ -1,0 +1,293 @@
+[
+ {
+  "id": "mixed-9001",
+  "family": "mixed",
+  "seed": 9001,
+  "cases": [
+   "occ"
+  ]
+ },
+ {
+  "id": "mixed-9002",
+  "family": "mixed",
+  "seed": 9002,
+  "cases": [
+   "occ",
+   "outside"
+  ]
+ },
+ {
+  "id": "mixed-9003",
+  "family": "mixed",
+  "seed": 9003,
+  "cases": [
+   "occ"
+  ]
+ },
+ {
+  "id": "mixed-9004",
+  "family": "mixed",
+  "seed": 9004,
+  "cases": [
+   "outside"
+  ]
+ },
+ {
+  "id": "mixed-9005",
+  "family": "mixed",
+  "seed": 9005,
+  "cases": []
+ },
+ {
+  "id": "mixed-9006",
+  "family": "mixed",
+  "seed": 9006,
+  "cases": [
+   "sym"
+  ]
+ },
+ {
+  "id": "mixed-9007",
+  "family": "mixed",
+  "seed": 9007,
+  "cases": [
+   "occ",
+   "outside"
+  ]
+ },
+ {
+  "id": "mixed-9008",
+  "family": "mixed",
+  "seed": 9008,
+  "cases": [
+   "occ",
+   "sym"
+  ]
+ },
+ {
+  "id": "mixed-9009",
+  "family": "mixed",
+  "seed": 9009,
+  "cases": [
+   "oblique"
+  ]
+ },
+ {
+  "id": "mixed-9010",
+  "family": "mixed",
+  "seed": 9010,
+  "cases": [
+   "occ",
+   "sym"
+  ]
+ },
+ {
+  "id": "mixed-9011",
+  "family": "mixed",
+  "seed": 9011,
+  "cases": [
+   "outside"
+  ]
+ },
+ {
+  "id": "mixed-9012",
+  "family": "mixed",
+  "seed": 9012,
+  "cases": [
+   "occ",
+   "outside"
+  ]
+ },
+ {
+  "id": "mixed-9013",
+  "family": "mixed",
+  "seed": 9013,
+  "cases": [
+   "esd",
+   "oblique",
+   "outside",
+   "sym"
+  ]
+ },
+ {
+  "id": "mixed-9014",
+  "family": "mixed",
+  "seed": 9014,
+  "cases": []
+ },
+ {
+  "id": "mixed-9015",
+  "family": "mixed",
+  "seed": 9015,
+  "cases": [
+   "oblique",
+   "outside",
+   "sym"
+  ]
+ },
+ {
+  "id": "mixed-9016",
+  "family": "mixed",
+  "seed": 9016,
+  "cases": [
+   "esd",
+   "oblique",
+   "occ"
+  ]
+ },
+ {
+  "id": "mixed-9017",
+  "family": "mixed",
+  "seed": 9017,
+  "cases": [
+   "oblique",
+   "occ",
+   "outside"
+  ]
+ },
+ {
+  "id": "mixed-9018",
+  "family": "mixed",
+  "seed": 9018,
+  "cases": [
+   "sym"
+  ]
+ },
+ {
+  "id": "mixed-9019",
+  "family": "mixed",
+  "seed": 9019,
+  "cases": [
+   "esd",
+   "occ"
+  ]
+ },
+ {
+  "id": "mixed-9020",
+  "family": "mixed",
+  "seed": 9020,
+  "cases": [
+   "occ"
+  ]
+ },
+ {
+  "id": "sym-9101",
+  "family": "sym",
+  "seed": 9101,
+  "cases": [
+   "sym"
+  ]
+ },
+ {
+  "id": "sym-9102",
+  "family": "sym",
+  "seed": 9102,
+  "cases": [
+   "sym"
+  ]
+ },
+ {
+  "id": "sym-9103",
+  "family": "sym",
+  "seed": 9103,
+  "cases": [
+   "sym"
+  ]
+ },
+ {
+  "id": "oblique-9111",
+  "family": "oblique",
+  "seed": 9111,
+  "cases": [
+   "oblique"
+  ]
+ },
+ {
+  "id": "oblique-9112",
+  "family": "oblique",
+  "seed": 9112,
+  "cases": [
+   "oblique"
+  ]
+ },
+ {
+  "id": "oblique-9113",
+  "family": "oblique",
+  "seed": 9113,
+  "cases": [
+   "oblique"
+  ]
+ },
+ {
+  "id": "esd-9121",
+  "family": "esd",
+  "seed": 9121,
+  "cases": [
+   "esd"
+  ]
+ },
+ {
+  "id": "esd-9122",
+  "family": "esd",
+  "seed": 9122,
+  "cases": [
+   "esd"
+  ]
+ },
+ {
+  "id": "esd-9123",
+  "family": "esd",
+  "seed": 9123,
+  "cases": [
+   "esd"
+  ]
+ },
+ {
+  "id": "occ-9131",
+  "family": "occ",
+  "seed": 9131,
+  "cases": [
+   "occ"
+  ]
+ },
+ {
+  "id": "occ-9132",
+  "family": "occ",
+  "seed": 9132,
+  "cases": [
+   "occ"
+  ]
+ },
+ {
+  "id": "occ-9133",
+  "family": "occ",
+  "seed": 9133,
+  "cases": [
+   "occ"
+  ]
+ },
+ {
+  "id": "outside-9141",
+  "family": "outside",
+  "seed": 9141,
+  "cases": [
+   "outside"
+  ]
+ },
+ {
+  "id": "outside-9142",
+  "family": "outside",
+  "seed": 9142,
+  "cases": [
+   "outside"
+  ]
+ },
+ {
+  "id": "outside-9143",
+  "family": "outside",
+  "seed": 9143,
+  "cases": [
+   "outside"
+  ]
+ }
+]

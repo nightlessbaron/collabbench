@@ -1,0 +1,15 @@
+{
+  "composer": "R. Tamsin",
+  "format": "cre-engraver-svg/1",
+  "mode": "major",
+  "spaces_per_beat": 12,
+  "staves": [
+    {
+      "bottom_y": 8.0,
+      "staff": 0,
+      "top_y": 0.0
+    }
+  ],
+  "title": "Bellwether March",
+  "work_id": "ref-0002"
+}

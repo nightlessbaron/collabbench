@@ -1,0 +1,39 @@
+{
+  "datastore": "reference.db",
+  "tables": [
+    {
+      "name": "references",
+      "columns": [
+        {
+          "name": "work_id",
+          "type": "TEXT",
+          "primary_key": true
+        },
+        {
+          "name": "title",
+          "type": "TEXT"
+        },
+        {
+          "name": "composer",
+          "type": "TEXT"
+        },
+        {
+          "name": "fifths",
+          "type": "INTEGER"
+        },
+        {
+          "name": "mode",
+          "type": "TEXT"
+        },
+        {
+          "name": "incipit",
+          "type": "TEXT"
+        },
+        {
+          "name": "note_count",
+          "type": "INTEGER"
+        }
+      ]
+    }
+  ]
+}

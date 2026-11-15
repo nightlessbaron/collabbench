@@ -1,0 +1,16 @@
+Helix Structural Genomics Center - deposit log (extract)
+=========================================================
+
+LIMS migration 3 -> 4 moved the sample registry and the alias/contact
+registry onto separate blocking keys.  Migration 4 -> 5 merged the beamline
+accounts.  The canonical tables for every deposit were regenerated once, at
+migration 4, with the pinned crystallography library that the archive team
+still had under licence.
+
+dep_0001  porous-materials beamline   deposited 2019-04-11
+dep_0002  porous-materials beamline   deposited 2020-02-03
+dep_0003  protein-crystallography     deposited 2021-09-27
+
+The HDX-3 controller images (boot/timebase, acquire, calibrate) and the
+iCE40-HX8K frame-timing daughterboard are part of the wider Release 7 scope
+and are tracked separately.

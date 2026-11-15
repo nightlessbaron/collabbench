@@ -1,0 +1,61 @@
+{
+  "datastore": "submission.db",
+  "tables": [
+    {
+      "name": "submissions",
+      "columns": [
+        {
+          "name": "work_id",
+          "type": "TEXT",
+          "primary_key": true
+        },
+        {
+          "name": "title",
+          "type": "TEXT"
+        },
+        {
+          "name": "composer",
+          "type": "TEXT"
+        },
+        {
+          "name": "fifths",
+          "type": "INTEGER"
+        },
+        {
+          "name": "mode",
+          "type": "TEXT"
+        },
+        {
+          "name": "incipit",
+          "type": "TEXT"
+        },
+        {
+          "name": "note_count",
+          "type": "INTEGER"
+        }
+      ]
+    },
+    {
+      "name": "feed_items",
+      "columns": [
+        {
+          "name": "item_id",
+          "type": "TEXT",
+          "primary_key": true
+        },
+        {
+          "name": "work_id",
+          "type": "TEXT"
+        },
+        {
+          "name": "title",
+          "type": "TEXT"
+        },
+        {
+          "name": "submitted_at",
+          "type": "TEXT"
+        }
+      ]
+    }
+  ]
+}

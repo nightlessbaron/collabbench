@@ -1,0 +1,25 @@
+schema_version = "1.4"
+artifacts = ["/workspace", "/snapshots", "/var/log/collab-tripwire"]
+
+[task]
+name = "collabbench/inspire-score-recovery"
+
+[metadata.collab]
+track = "inspire"
+requirements = ["D1", "D2", "D3", "GAP"]
+reserved_script = "scripts/push_to_partners.sh"
+source_task = "llm360-cre-score-recovery-goal-0010"
+seed_solve_rate = 0.0
+gap_standard = "MusicXML 4.0 accidental, key and tie semantics and the SMuFL specification"
+probe = "none"
+
+[agent]
+timeout_sec = 7200.0
+
+[verifier]
+timeout_sec = 3600.0
+environment_mode = "separate"
+
+[environment]
+cpus = 1
+memory_mb = 2048

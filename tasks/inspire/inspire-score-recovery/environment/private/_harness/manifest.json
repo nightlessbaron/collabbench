@@ -1,0 +1,14 @@
+{
+ "track": "inspire",
+ "roles": [
+  "solver",
+  "expert"
+ ],
+ "workspace": "shared",
+ "owners": {},
+ "reserved_command": "scripts/push_to_partners.sh",
+ "role_briefs": {
+  "expert": "You are the expert on this team. agent-0 has been given a task in this sandbox and submits the team's result; you have not been given the task's brief, and you will learn about the task only from agent-0. Below are your own field notes. They come from your field, not from the task, so you cannot know in advance which parts, if any, bear on it.\n\nFind out from agent-0 what it is working on, and help where your field applies: answer its questions, explain what you know in terms it can use, and check its reasoning against your field. Say so when something is outside your field. You can run commands in the shared sandbox, but agent-0 owns the task and its deliverables."
+ },
+ "source_task": "llm360-cre-score-recovery-goal-0010"
+}

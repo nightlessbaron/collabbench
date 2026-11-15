@@ -1,0 +1,28 @@
+{
+  "records": [
+    {
+      "item_id": "item-007",
+      "work_id": "sub-0003",
+      "title": "Cinder Waltz",
+      "submitted_at": "2026-10-21"
+    },
+    {
+      "item_id": "item-002",
+      "work_id": "sub-0002",
+      "title": "Bellwether March",
+      "submitted_at": "2026-08-11"
+    },
+    {
+      "item_id": "item-004",
+      "work_id": "sub-0004",
+      "title": "Dapplewood Hymn",
+      "submitted_at": "2026-09-19"
+    },
+    {
+      "item_id": "item-008",
+      "work_id": "sub-0004",
+      "title": "Dapplewood Hymn",
+      "submitted_at": "2026-11-08"
+    }
+  ]
+}

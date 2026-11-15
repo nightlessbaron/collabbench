@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1">
+  <g data-glyph="gClef" data-staff="0" data-x="0" data-y="6"/>
+  <g data-glyph="keyFlat" data-staff="0" data-x="0" data-y="2"/>
+  <g data-glyph="timeSig4" data-staff="0" data-x="0" data-y="1"/>
+  <g data-glyph="timeSig4" data-staff="0" data-x="0" data-y="3"/>
+  <g data-glyph="barlineSingle" data-staff="0" data-x="48" data-y="4"/>
+  <g data-glyph="barlineFinal" data-staff="0" data-x="96" data-y="4"/>
+  <g data-glyph="noteheadHalf" data-staff="0" data-x="0" data-y="10"/>
+  <g data-glyph="ledgerLine" data-staff="0" data-x="0" data-y="10"/>
+  <g data-glyph="noteheadBlack" data-staff="0" data-x="24" data-y="7"/>
+  <g data-glyph="accidentalDoubleSharp" data-staff="0" data-x="23" data-y="7"/>
+  <g data-glyph="noteheadBlack" data-staff="0" data-x="36" data-y="7"/>
+  <g data-glyph="noteheadHalf" data-staff="0" data-x="48" data-y="1"/>
+  <g data-glyph="noteheadHalf" data-staff="0" data-x="72" data-y="-2"/>
+  <g data-glyph="ledgerLine" data-staff="0" data-x="72" data-y="-2"/>
+</svg>

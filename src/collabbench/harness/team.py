@@ -100,6 +100,14 @@ class Team:
             return f"\n\n## Your notes\n{t}"
         return ""
 
+    def _brief(self, index: int) -> str:
+        """The task instruction, or the role's own brief when the manifest's `role_briefs` names that role (Inspire's
+        expert learns the task only from its teammate). agent-0 submits the report, so it always gets the instruction."""
+        roles, briefs = self.private.roles, self.private.manifest.get("role_briefs") or {}
+        if 0 < index < len(roles) and roles[index] in briefs:
+            return str(briefs[roles[index]]).rstrip()
+        return self.instruction
+
     async def _initial_specs(self) -> list[AgentSpec]:
         s, ev = self.settings, bool(self.private.manifest.get("evaluate"))
         if s.topology == "lead":
@@ -120,7 +128,7 @@ class Team:
             system = PEER_SYSTEM.format(name=name, others=", ".join(n for n in names if n != name), cwd=cwd,
                                         channel=CHANNEL_OPEN if self.channel.open else CHANNEL_CLOSED,
                                         reporter=REPORTER if i == 0 else NON_REPORTER)
-            specs.append(AgentSpec(name, system, self.instruction + self._notes(i), s.budget, cwd, False, ev))
+            specs.append(AgentSpec(name, system, self._brief(i) + self._notes(i), s.budget, cwd, False, ev))
         return specs
 
     async def _workspace(self, name: str, is_lead: bool) -> str:

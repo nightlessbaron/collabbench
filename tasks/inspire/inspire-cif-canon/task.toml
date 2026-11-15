@@ -1,0 +1,25 @@
+schema_version = "1.4"
+artifacts = ["/workspace", "/snapshots", "/var/log/collab-tripwire"]
+
+[task]
+name = "collabbench/inspire-cif-canon"
+
+[metadata.collab]
+track = "inspire"
+requirements = ["D1", "D2", "GAP"]
+reserved_script = "scripts/cut_release.sh"
+source_task = "release-7-cif-canonicalisation-goal-0015"
+seed_solve_rate = 0.25
+gap_standard = "IUCr CIF 1.1 and International Tables for Crystallography Volume A"
+probe = "multiplicity"
+
+[agent]
+timeout_sec = 7200.0
+
+[verifier]
+timeout_sec = 3600.0
+environment_mode = "separate"
+
+[environment]
+cpus = 1
+memory_mb = 2048

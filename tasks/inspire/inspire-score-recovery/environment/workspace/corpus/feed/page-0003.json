@@ -1,0 +1,16 @@
+{
+  "records": [
+    {
+      "item_id": "item-002",
+      "work_id": "sub-0002",
+      "title": "Bellwether March",
+      "submitted_at": "2026-08-11"
+    },
+    {
+      "item_id": "item-003",
+      "work_id": "sub-0003",
+      "title": "Cinder Waltz",
+      "submitted_at": "2026-09-02"
+    }
+  ]
+}
