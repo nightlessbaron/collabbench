@@ -152,11 +152,18 @@ class WaterFillingTrap(WaterFilling):
         key = ("trap", tuple(p["floors"]), p["budget"])
         if key not in _CACHE:
             x = self._vector(self.concept_plan(p), p)
-            for _ in range(6000):  # projected gradient ascent on the scaled simplex
-                eps = 1e-6
-                grad = np.array([(self._value(x + eps * e, p) - self._value(x - eps * e, p)) / (2 * eps)
-                                 for e in np.eye(len(x))])
-                x = _project(x + 0.05 * grad, p["budget"])
+            idx = {k: i for i, k in enumerate(p["items"])}
+            partner = np.zeros(len(x), dtype=int) - 1
+            for a, b in p["pairs"]:
+                partner[idx[a]], partner[idx[b]] = idx[b], idx[a]
+            n = np.array(p["floors"])
+            for _ in range(20000):  # projected gradient ascent on the scaled simplex
+                grad = 1 / (n + x) - np.where(partner >= 0, p["overlap"] / p["budget"] * x[partner], 0.0)
+                nxt = _project(x + 0.05 * grad, p["budget"])
+                done = np.abs(nxt - x).max() < 1e-13
+                x = nxt
+                if done:
+                    break
             _CACHE[key] = self._plan(self.key, p["items"], x)
         return _CACHE[key]
 
@@ -234,9 +241,12 @@ class Kelly(Simulator):
         items = rng.sample(TEAMS, 6)
         p_win, payoff = [], []
         for i in range(6):
-            b = round(rng.uniform(0.6, 4.0), 2)
-            edge = rng.uniform(0.04, 0.3) if i < 4 else -rng.uniform(0.02, 0.15)  # two teams should stake nothing
-            p_win.append(round(min(0.95, max(0.05, (1 + edge) / (1 + b))), 3))
+            b = round(rng.uniform(0.8, 4.0), 2)
+            if i < 4:  # a positive edge: the Kelly stake f* = p - (1 - p) / b lies between 0.15 and 0.6
+                q = (rng.uniform(0.15, 0.6) * b + 1) / (b + 1)
+            else:  # a negative edge: stake nothing
+                q = (1 - rng.uniform(0.03, 0.15)) / (1 + b)
+            p_win.append(round(min(0.95, max(0.05, q)), 3))
             payoff.append(b)
         return {"items": items, "p": p_win, "b": payoff}
 
@@ -281,7 +291,7 @@ class SqrtStaffing(Simulator):
         return {"items": items, "load": load, "staff": total}
 
     def observables(self, p: dict) -> list[dict]:
-        return [{"queue": k, "load_erlangs": r} for k, r in zip(p["items"], p["load"])]
+        return [{"line": k, "workload": r} for k, r in zip(p["items"], p["load"])]
 
     def _vector(self, plan: dict, p: dict) -> np.ndarray:
         return _rescale(self._raw(plan, p), p["staff"])
@@ -296,10 +306,14 @@ class SqrtStaffing(Simulator):
         return self._plan(self.key, p["items"], r + beta * np.sqrt(r))
 
     def baseline(self, p: dict) -> dict:
-        return self._plan(self.key, p["items"], np.full(len(p["items"]), p["staff"] / len(p["items"])))
+        """The usual plan without the concept: agents in proportion to load."""
+        r = np.array(p["load"])
+        return self._plan(self.key, p["items"], r * p["staff"] / r.sum())
 
     def hint_capture(self, plan: dict, p: dict) -> float:
-        return _l1_capture(self._vector(plan, p), self._vector(self.optimum(p), p), 2 * p["staff"])
+        """Distance to the concept's plan, relative to the baseline's distance (the plans differ only slightly)."""
+        best = self._vector(self.optimum(p), p)
+        return _l1_capture(self._vector(plan, p), best, np.abs(self._vector(self.baseline(p), p) - best).sum())
 
 
 # --- 5. inverse-elasticity (Ramsey) rule (public economics) -------------------------------------------------------
@@ -394,9 +408,12 @@ class PrefixCode(Simulator):
         return {self.key: {k: math.ceil(math.log2(len(p["items"]))) for k in p["items"]}}
 
     def hint_capture(self, plan: dict, p: dict) -> float:
-        share = np.array(p["share"])
-        d, best = self._vector(plan, p), self._vector(self.optimum(p), p)
-        return float(max(0.0, 1.0 - (share * np.abs(d - best)).sum() / (share * best).sum()))
+        share, best = np.array(p["share"]), self._vector(self.optimum(p), p)
+
+        def miss(d: np.ndarray) -> float:
+            return float((share * np.abs(d - best)).sum())
+
+        return max(0.0, 1.0 - miss(self._vector(plan, p)) / miss(self._vector(self.baseline(p), p)))
 
 
 SIMULATORS: dict[str, Simulator] = {

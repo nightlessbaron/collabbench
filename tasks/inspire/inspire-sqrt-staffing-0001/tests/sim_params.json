@@ -1,0 +1,22 @@
+{
+ "concept": "sqrt_staffing",
+ "params": {
+  "items": [
+   "shipping",
+   "sales",
+   "billing",
+   "tech",
+   "fraud",
+   "returns"
+  ],
+  "load": [
+   42.2,
+   6.4,
+   10.8,
+   24.3,
+   4.0,
+   85.3
+  ],
+  "staff": 210.8
+ }
+}

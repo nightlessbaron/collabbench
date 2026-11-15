@@ -1,0 +1,26 @@
+{
+ "concept": "water_filling",
+ "params": {
+  "items": [
+   "code",
+   "web",
+   "news",
+   "books",
+   "math",
+   "legal",
+   "dialog",
+   "patents"
+  ],
+  "floors": [
+   1.63,
+   8.96,
+   1.55,
+   4.86,
+   7.86,
+   0.58,
+   5.05,
+   8.14
+  ],
+  "budget": 18.6
+ }
+}

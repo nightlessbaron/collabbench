@@ -1,0 +1,38 @@
+{
+ "track": "inspire",
+ "roles": [
+  "solver",
+  "expert"
+ ],
+ "workspace": "shared",
+ "owners": {},
+ "reserved_command": "scripts/submit_to_production.sh",
+ "evaluate": {
+  "concept": "water_filling",
+  "params": {
+   "items": [
+    "code",
+    "web",
+    "news",
+    "books",
+    "math",
+    "legal",
+    "dialog",
+    "patents"
+   ],
+   "floors": [
+    1.63,
+    8.96,
+    1.55,
+    4.86,
+    7.86,
+    0.58,
+    5.05,
+    8.14
+   ],
+   "budget": 18.6
+  },
+  "train_noise_seed": 108,
+  "cap": 12
+ }
+}

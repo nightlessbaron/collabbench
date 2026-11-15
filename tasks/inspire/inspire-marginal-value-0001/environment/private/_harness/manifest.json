@@ -1,0 +1,42 @@
+{
+ "track": "inspire",
+ "roles": [
+  "solver",
+  "expert"
+ ],
+ "workspace": "shared",
+ "owners": {},
+ "reserved_command": "scripts/submit_to_production.sh",
+ "evaluate": {
+  "concept": "marginal_value",
+  "params": {
+   "items": [
+    "jobs.example",
+    "shop.example",
+    "forum.example",
+    "wiki.example",
+    "docs.example",
+    "news.example"
+   ],
+   "tau": [
+    17.8,
+    12.4,
+    23.0,
+    25.9,
+    17.9,
+    3.4
+   ],
+   "rate": [
+    35.6,
+    30.8,
+    38.7,
+    9.7,
+    23.5,
+    38.0
+   ],
+   "switch": 4.5
+  },
+  "train_noise_seed": 108,
+  "cap": 12
+ }
+}

@@ -1,0 +1,30 @@
+{
+ "concept": "marginal_value",
+ "params": {
+  "items": [
+   "jobs.example",
+   "shop.example",
+   "forum.example",
+   "wiki.example",
+   "docs.example",
+   "news.example"
+  ],
+  "tau": [
+   17.8,
+   12.4,
+   23.0,
+   25.9,
+   17.9,
+   3.4
+  ],
+  "rate": [
+   35.6,
+   30.8,
+   38.7,
+   9.7,
+   23.5,
+   38.0
+  ],
+  "switch": 4.5
+ }
+}

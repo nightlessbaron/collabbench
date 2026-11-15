@@ -156,7 +156,7 @@ async def test_outcome_files_written(tmp_path):
 
 
 class StubSim:
-    def validate(self, plan):
+    def validate(self, plan, params):
         return None if "w" in plan else "missing w"
 
     def objective(self, plan, params, noise_seed=None):

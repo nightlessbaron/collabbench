@@ -226,7 +226,7 @@ class Team:
             plan = None
         sims = self._simulators or importlib.import_module("collabbench.tracks.inspire.sims").SIMULATORS
         sim, params = sims[ev["concept"]], ev["params"]
-        problem = "not valid JSON" if not isinstance(plan, dict) else sim.validate(plan)
+        problem = "not valid JSON" if not isinstance(plan, dict) else sim.validate(plan, params)
         if problem:
             self.log.emit(agent, "evaluate", path=path, n=n, valid=False, problem=problem)
             return f"Plan rejected: {problem}. ({self.settings.evaluate_cap - n} evaluations left for the team.)"

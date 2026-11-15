@@ -1,0 +1,41 @@
+{
+ "track": "inspire",
+ "roles": [
+  "solver",
+  "expert"
+ ],
+ "workspace": "shared",
+ "owners": {},
+ "reserved_command": "scripts/submit_to_production.sh",
+ "evaluate": {
+  "concept": "kelly",
+  "params": {
+   "items": [
+    "onboarding",
+    "support",
+    "search",
+    "pricing",
+    "checkout",
+    "ads"
+   ],
+   "p": [
+    0.54,
+    0.553,
+    0.464,
+    0.513,
+    0.438,
+    0.419
+   ],
+   "b": [
+    2.85,
+    2.68,
+    3.67,
+    2.36,
+    1.16,
+    1.03
+   ]
+  },
+  "train_noise_seed": 108,
+  "cap": 12
+ }
+}

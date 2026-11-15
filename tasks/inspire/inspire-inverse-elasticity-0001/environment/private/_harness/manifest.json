@@ -1,0 +1,45 @@
+{
+ "track": "inspire",
+ "roles": [
+  "solver",
+  "expert"
+ ],
+ "workspace": "shared",
+ "owners": {},
+ "reserved_command": "scripts/submit_to_production.sh",
+ "evaluate": {
+  "concept": "inverse_elasticity",
+  "params": {
+   "items": [
+    "storage",
+    "exports",
+    "seats",
+    "sso",
+    "analytics",
+    "api_calls",
+    "domains"
+   ],
+   "sensitivity": [
+    0.58,
+    1.0,
+    0.46,
+    1.11,
+    1.73,
+    0.37,
+    2.77
+   ],
+   "volume": [
+    145,
+    494,
+    105,
+    414,
+    116,
+    385,
+    570
+   ],
+   "target": 178.3
+  },
+  "train_noise_seed": 108,
+  "cap": 12
+ }
+}

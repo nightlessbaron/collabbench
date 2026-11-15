@@ -1,0 +1,31 @@
+{
+ "concept": "prefix_code",
+ "params": {
+  "items": [
+   "messages",
+   "lights",
+   "translate",
+   "shopping",
+   "weather",
+   "news",
+   "traffic",
+   "recipes",
+   "podcasts",
+   "music",
+   "timer"
+  ],
+  "share": [
+   0.2031,
+   0.0485,
+   0.0945,
+   0.0987,
+   0.1373,
+   0.0404,
+   0.0808,
+   0.0515,
+   0.0699,
+   0.1133,
+   0.062
+  ]
+ }
+}
