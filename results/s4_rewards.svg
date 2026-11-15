@@ -27,7 +27,7 @@
 <rect x="680.7" y="148.2" width="33.3" height="167.8" fill="#9db4d6"/><text x="697.3" y="144.2" text-anchor="middle" font-size="10">0.65</text>
 <rect x="718.0" y="109.1" width="33.3" height="206.9" fill="#6a8cc2"/><text x="734.7" y="105.1" text-anchor="middle" font-size="10">0.80</text>
 <rect x="755.3" y="85.3" width="33.3" height="230.7" fill="#2f5597"/><text x="772.0" y="81.3" text-anchor="middle" font-size="10">0.89</text>
-<rect x="792.7" y="298" width="33.3" height="18" fill="none" stroke="#f0a868" stroke-dasharray="2 2"/>
+<rect x="792.7" y="62.4" width="33.3" height="253.6" fill="#f0a868"/><text x="809.3" y="58.4" text-anchor="middle" font-size="10">0.98</text>
 <rect x="830.0" y="63.6" width="33.3" height="252.4" fill="#c45f0f"/><text x="846.7" y="59.6" text-anchor="middle" font-size="10">0.97</text>
 <rect x="867.3" y="298" width="33.3" height="18" fill="none" stroke="#8fd1a8" stroke-dasharray="2 2"/>
 <rect x="904.7" y="298" width="33.3" height="18" fill="none" stroke="#1f8a4c" stroke-dasharray="2 2"/>

@@ -45,7 +45,7 @@ same 3M-token budget per agent. Results are added here as they finish; each row 
 | Claude Opus 5.5 | aldol-s4 | team of three | **0.992** | 0.67M | 7 | 1 | p1, x5 |
 | Claude Opus 5.5 | cohort-s4 | one agent | *running* | | | | |
 | Claude Opus 5.5 | cohort-s4 | team of three | *running* | | | | |
-| Claude Opus 5.5 | fiscal-s4 | one agent | *running* | | | | |
+| Claude Opus 5.5 | fiscal-s4 | one agent | **0.975** | 1.28M | 10 | 1 | R2, p6 |
 | Claude Opus 5.5 | fiscal-s4 | team of three | **0.971** | 0.92M | 9 | 2 | R2, p6 |
 | Claude Opus 5.5 | poe-s1 | one agent | *running* | | | | |
 | Claude Opus 5.5 | poe-s1 | team of three | *running* | | | | |
