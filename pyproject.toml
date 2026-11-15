@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "collabbench"
+version = "0.1.0"
+description = "Multi-agent collaboration benchmark: team harness, seeded tasks, Modal runner and metrics"
+requires-python = ">=3.12"
+dependencies = [
+    "harbor==0.24.0",
+    "modal==1.6.2",
+    "openai>=2",
+    "numpy",
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio"]
+
+[project.scripts]
+collabbench = "collabbench.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/collabbench"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = ["live: needs the Comet gateway or Modal (deselect with -m 'not live')"]
+addopts = "-m 'not live'"
