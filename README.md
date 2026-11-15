@@ -42,7 +42,7 @@ same 3M-token budget per agent. Results are added here as they finish; each row 
 | Model | Task | Setup | Reward | Tokens | Minutes | Agents active | Checks missed |
 |---|---|---|---|---|---|---|---|
 | Claude Opus 5.5 | aldol-s4 | one agent | **0.993** | 0.39M | 6 | 1 | x5 |
-| Claude Opus 5.5 | aldol-s4 | team of three | *running* | | | | |
+| Claude Opus 5.5 | aldol-s4 | team of three | **0.992** | 0.67M | 7 | 1 | p1, x5 |
 | Claude Opus 5.5 | cohort-s4 | one agent | *running* | | | | |
 | Claude Opus 5.5 | cohort-s4 | team of three | *running* | | | | |
 | Claude Opus 5.5 | fiscal-s4 | one agent | *running* | | | | |
