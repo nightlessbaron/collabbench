@@ -94,7 +94,8 @@ def benchmark(trial_rows: list[dict]) -> list[dict]:
         for task, status in tasks:
             cal = "; ".join(f"{c} {sum(v) / len(v):.2f} (n={len(v)})"
                             for (i, c), v in sorted(runs.items()) if i == task)
-            rows.append({"family": family, "track": track, "stage": stage, "task": task or None,
+            rows.append({"id": f"{track}/{task or '-'}", "family": family, "track": track, "stage": stage,
+                         "task": task or None,
                          "status": status, "oracle": gates.get((task, "gate-oracle")),
                          "nop": gates.get((task, "gate-nop")), "admission_runs": cal or None})
     return rows
