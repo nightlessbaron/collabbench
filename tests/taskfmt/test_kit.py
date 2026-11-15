@@ -183,3 +183,20 @@ def test_write_task_rejects_empty_workspace(tmp_path):
     # git does not track empty directories, so `COPY workspace/ /workspace/` would fail to build from a checkout
     with pytest.raises(ValueError, match="workspace_files"):
         write_task(toy_spec(workspace_files={}), tmp_path)
+
+
+@pytest.mark.parametrize("network", [None, "public"])
+def test_task_toml_disables_agent_network(tmp_path, network):
+    """Harbor 0.24 gives the agent public internet unless [environment].network_mode says otherwise. The kit default
+    is no network for the agent phase and for the separate verifier (both resolved by Harbor's own policy code)."""
+    from harbor.models.task.config import NetworkMode, VerifierEnvironmentMode
+    from harbor.models.trial.config import AgentConfig, EnvironmentConfig
+    from harbor.trial.network_policy import resolve_trial_network_plan
+
+    spec = toy_spec() if network is None else toy_spec(network=network)
+    cfg = TaskConfig.model_validate(tomllib.loads((write_task(spec, tmp_path) / "task.toml").read_text()))
+    plan = resolve_trial_network_plan(cfg, AgentConfig(), EnvironmentConfig(), None,
+                                      verifier_mode=VerifierEnvironmentMode.SEPARATE)
+    want = NetworkMode.NO_NETWORK if network is None else NetworkMode.PUBLIC
+    assert plan.agent_env_baseline.network_mode == want and plan.agent_phase.network_mode == want
+    assert plan.verifier_phase.network_mode == want

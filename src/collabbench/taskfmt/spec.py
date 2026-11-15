@@ -28,6 +28,9 @@ class TaskSpec:
     cpus: int = 1
     memory_mb: int = 2048
     extra_metadata: dict = field(default_factory=dict)
+    # Harbor NetworkMode for the agent sandbox and the separate verifier ("no-network", "public" or "allowlist").
+    # Harbor defaults to public; the kit does not: images install every dependency at build time.
+    network: str = "no-network"
 
 
 def _write(path: Path, text: str, mode: int | None = None) -> None:
@@ -68,6 +71,7 @@ environment_mode = "separate"
 [environment]
 cpus = {spec.cpus}
 memory_mb = {spec.memory_mb}
+network_mode = {json.dumps(spec.network)}
 ''')
     _write(d / "instruction.md", spec.instruction.rstrip() + "\n")
     env = d / "environment"
