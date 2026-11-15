@@ -16,7 +16,7 @@ def _fn(name: str, description: str, properties: dict, required: list[str]) -> d
 BASH = _fn("bash", "Run a shell command in the shared sandbox, in your working directory. Returns the exit code and "
                    "output (long output is cut in the middle).",
            {"command": {"type": "string"},
-            "timeout_s": {"type": "integer", "description": "Seconds before the command is killed (default 600)."}},
+            "timeout_s": {"type": "integer", "description": "Seconds before the command is killed (default 600, max 900)."}},
            ["command"])
 SEND = _fn("send", "Send a message to one teammate, or to everyone with to='all'. It arrives at the start of their "
                    "next turn.",
@@ -45,6 +45,7 @@ FINISH = _fn("finish", "End your work and submit your final report. Call it once
              ["report"])
 
 CHANNEL_TOOLS = ("send", "wait", "publish", "read_finding")
+MAX_BASH_TIMEOUT_S = 900  # server-side cap: the model chooses timeout_s, the harness bounds it
 
 
 def tool_specs(*, channel_open: bool, can_spawn: bool, can_evaluate: bool) -> list[dict]:
@@ -68,7 +69,7 @@ def truncate_output(text: str, head: int = 12000, tail: int = 8000) -> str:
 
 async def run_command(env, log: EventLog, agent: str, command: str, timeout_s: int, cwd: str) -> str:
     """Run `command` under bash and coreutils' timeout in the sandbox; log an `action` event; return the tool text."""
-    timeout_s = max(1, int(timeout_s))
+    timeout_s = min(max(1, int(timeout_s)), MAX_BASH_TIMEOUT_S)
     wrapped = f"timeout -k 5 {timeout_s} bash -c {shlex.quote(command)}"
     start = time.monotonic()
     try:

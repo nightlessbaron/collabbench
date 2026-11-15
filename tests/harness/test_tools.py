@@ -56,3 +56,11 @@ async def test_bash_timeout_returns_notice(tmp_path):
     assert time.monotonic() - start < 3
     assert "timed out" in out and "before" in out
     assert EventLog.read(tmp_path / "ev.jsonl")[0]["payload"]["timed_out"] is True
+
+
+async def test_bash_timeout_clamped_to_server_max(tmp_path):
+    from collabbench.harness.tools import MAX_BASH_TIMEOUT_S
+    env, log = LocalEnvironment(tmp_path), EventLog(tmp_path / "ev.jsonl")
+    await run_command(env, log, "agent-0", "true", 10**9, "/workspace")
+    assert MAX_BASH_TIMEOUT_S == 900
+    assert env.commands[-1].startswith(f"timeout -k 5 {MAX_BASH_TIMEOUT_S} ")

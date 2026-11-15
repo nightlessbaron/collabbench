@@ -96,3 +96,13 @@ def test_closed_channel_send_errors(tmp_path):
     reply = ch.send("agent-0", "agent-1", "hi")
     assert "closed" in reply
     assert ch.drain("agent-1") == []
+
+
+def test_notify_delivers_harness_message_without_event(tmp_path):
+    ch, _ = make(tmp_path)
+    ch.notify("agent-0", "agent-1 finished")
+    assert ch.drain("agent-0") == [("harness", "agent-1 finished")]
+    assert events(tmp_path, "message") == []
+    closed, _ = make(tmp_path / "c", open=False)
+    closed.notify("agent-0", "x")
+    assert closed.drain("agent-0") == []  # no harness notices when the channel is closed

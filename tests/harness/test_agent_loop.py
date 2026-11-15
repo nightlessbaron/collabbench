@@ -110,7 +110,7 @@ async def test_three_silent_replies_stop(tmp_path):
 
 async def test_repeated_command_emits_loop(tmp_path):
     _, log, services, spec = setup(tmp_path)
-    steps = [result(calls=[call("bash", id=f"r{i}", command="echo x")]) for i in range(5)]
+    steps = [result(calls=[call("bash", _id=f"r{i}", command="echo x")]) for i in range(5)]
     steps.append(result(calls=[call("finish", report=REPORT)]))
     await run_agent(spec, ScriptedClient(steps), services, log, TeamSettings())
     assert types(tmp_path).count("loop") == 1
@@ -146,3 +146,15 @@ async def test_llm_unavailable_marks_error(tmp_path):
 
     out = await run_agent(spec, ScriptedClient([boom]), services, log, TeamSettings())
     assert out.status == "error" and "error" in types(tmp_path)
+
+
+async def test_cancel_returns_stopped_outcome(tmp_path):
+    import asyncio
+    _, log, services, spec = setup(tmp_path)
+    client = ScriptedClient([result(calls=[call("bash", command="sleep 30")])])
+    task = asyncio.create_task(run_agent(spec, client, services, log, TeamSettings()))
+    await asyncio.sleep(0.3)
+    task.cancel()
+    out = await asyncio.wait_for(task, 5)
+    assert out.status == "stopped" and out.turns == 1 and len(out.transcript) >= 3
+    assert EventLog.read(tmp_path / "ev.jsonl")[-1]["payload"]["reason"] == "cancelled"

@@ -62,6 +62,11 @@ class Channel:
             self._deliver(r, (sender, text))
         return f"Sent to {', '.join(recipients) or 'nobody (no live teammates)'}."
 
+    def notify(self, agent: str, text: str) -> None:
+        """A harness notice (not agent communication): no `message` event; nothing when the channel is closed."""
+        if self.open and agent in self._live:
+            self._deliver(agent, ("harness", text))
+
     def drain(self, agent: str) -> list[Message]:
         msgs, self._inbox[agent] = self._inbox.get(agent, []), []
         return msgs

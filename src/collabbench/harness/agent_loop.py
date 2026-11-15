@@ -70,78 +70,81 @@ async def run_agent(spec: AgentSpec, client: ChatClient, services: Services, log
     reason, report = "", None
     last_command, streak, sent = None, 0, Counter()
 
-    while status is None:
-        if services.stop.is_set() or services.channel.ended:
-            status, reason = "stopped", "the team run ended"
-            break
-        if turns >= settings.max_turns:
-            status, reason = "stopped", f"max_turns={settings.max_turns}"
-            break
-        inbox = services.channel.drain(spec.name)
-        if inbox:
-            text = "\n".join(f"[from {sender}] {body}" for sender, body in inbox)
-            messages.append({"role": "user", "content": text})
-            new_chars += len(text)
-        if last_prompt + new_chars / 3 > cap:
-            messages, summary = await compact(messages, client)
-            if summary is not None:
-                used = summary.prompt_tokens + summary.completion_tokens
-                log.emit(spec.name, "compaction", tokens_in=summary.prompt_tokens,
-                         tokens_out=summary.completion_tokens, messages_after=len(messages))
-                last_prompt, new_chars = 0, sum(len(json.dumps(m)) for m in messages)
-                if budget.charge(used) == "exhausted":
-                    status, reason = "budget_exhausted", "budget used up by compaction"
+    try:
+        while status is None:
+            if services.stop.is_set() or services.channel.ended:
+                status, reason = "stopped", "the team run ended"
+                break
+            if turns >= settings.max_turns:
+                status, reason = "stopped", f"max_turns={settings.max_turns}"
+                break
+            inbox = services.channel.drain(spec.name)
+            if inbox:
+                text = "\n".join(f"[from {sender}] {body}" for sender, body in inbox)
+                messages.append({"role": "user", "content": text})
+                new_chars += len(text)
+            if last_prompt + new_chars / 3 > cap:
+                messages, summary = await compact(messages, client)
+                if summary is not None:
+                    used = summary.prompt_tokens + summary.completion_tokens
+                    log.emit(spec.name, "compaction", tokens_in=summary.prompt_tokens,
+                             tokens_out=summary.completion_tokens, messages_after=len(messages))
+                    last_prompt, new_chars = 0, sum(len(json.dumps(m)) for m in messages)
+                    if budget.charge(used) == "exhausted":
+                        status, reason = "budget_exhausted", "budget used up by compaction"
+                        break
+            try:
+                res = await client.chat(messages, tools)
+            except (LLMUnavailable, LLMError) as e:
+                log.emit(spec.name, "error", kind=type(e).__name__, error=str(e)[:500])
+                status, reason = "error", type(e).__name__
+                break
+            turns += 1
+            last_prompt, new_chars = res.prompt_tokens, len(res.content)
+            state = budget.charge(res.prompt_tokens + res.completion_tokens)
+            log.emit(spec.name, "llm_call", tokens_in=res.prompt_tokens, tokens_out=res.completion_tokens, turn=turns,
+                     reasoning=res.reasoning, content=res.content, finish_reason=res.finish_reason,
+                     tool_calls=[{"name": c.name, "raw": c.raw} for c in res.tool_calls])
+            messages.append(res.as_message())
+
+            if state == "exhausted":
+                fin = next((c for c in res.tool_calls if c.name == "finish"), None)
+                text, report = await _dispatch(fin, spec, services, log, allowed) if fin else ("", None)
+                status, reason = ("finished", "") if report is not None else ("budget_exhausted", "token budget used up")
+                break
+            if not res.tool_calls:
+                silent += 1
+                if silent >= SILENT_LIMIT:
+                    status, reason = "stopped", f"{SILENT_LIMIT} replies without a tool call"
                     break
-        try:
-            res = await client.chat(messages, tools)
-        except (LLMUnavailable, LLMError) as e:
-            log.emit(spec.name, "error", kind=type(e).__name__, error=str(e)[:500])
-            status, reason = "error", type(e).__name__
-            break
-        turns += 1
-        last_prompt, new_chars = res.prompt_tokens, len(res.content)
-        state = budget.charge(res.prompt_tokens + res.completion_tokens)
-        log.emit(spec.name, "llm_call", tokens_in=res.prompt_tokens, tokens_out=res.completion_tokens, turn=turns,
-                 reasoning=res.reasoning, content=res.content, finish_reason=res.finish_reason,
-                 tool_calls=[{"name": c.name, "raw": c.raw} for c in res.tool_calls])
-        messages.append(res.as_message())
+                messages.append({"role": "user", "content": NUDGE})
+                continue
+            silent = 0
 
-        if state == "exhausted":
-            fin = next((c for c in res.tool_calls if c.name == "finish"), None)
-            text, report = await _dispatch(fin, spec, services, log, allowed) if fin else ("", None)
-            status, reason = ("finished", "") if report is not None else ("budget_exhausted", "token budget used up")
-            break
-        if not res.tool_calls:
-            silent += 1
-            if silent >= SILENT_LIMIT:
-                status, reason = "stopped", f"{SILENT_LIMIT} replies without a tool call"
-                break
-            messages.append({"role": "user", "content": NUDGE})
-            continue
-        silent = 0
+            for c in res.tool_calls:
+                text, report = await _dispatch(c, spec, services, log, allowed)
+                messages.append({"role": "tool", "tool_call_id": c.id, "content": text})
+                new_chars += len(text)
+                if c.name == "bash" and c.arguments:
+                    command = str(c.arguments.get("command"))
+                    streak = streak + 1 if command == last_command else 1
+                    last_command = command
+                    if streak % COMMAND_REPEATS == 0:
+                        log.emit(spec.name, "loop", kind="command", command=command, repeats=streak)
+                if c.name == "send" and c.arguments:
+                    key = str(c.arguments.get("text"))
+                    sent[key] += 1
+                    if sent[key] == MESSAGE_REPEATS:
+                        log.emit(spec.name, "loop", kind="message", text=key[:500], repeats=sent[key])
+                if report is not None:
+                    status = "finished"
+                    break
+            if status is None and state == "warn":
+                messages.append({"role": "user", "content": WARNING})
+                log.emit(spec.name, "budget_warning", used=budget.used, limit=budget.limit)
 
-        for c in res.tool_calls:
-            text, report = await _dispatch(c, spec, services, log, allowed)
-            messages.append({"role": "tool", "tool_call_id": c.id, "content": text})
-            new_chars += len(text)
-            if c.name == "bash" and c.arguments:
-                command = str(c.arguments.get("command"))
-                streak = streak + 1 if command == last_command else 1
-                last_command = command
-                if streak % COMMAND_REPEATS == 0:
-                    log.emit(spec.name, "loop", kind="command", command=command, repeats=streak)
-            if c.name == "send" and c.arguments:
-                key = str(c.arguments.get("text"))
-                sent[key] += 1
-                if sent[key] == MESSAGE_REPEATS:
-                    log.emit(spec.name, "loop", kind="message", text=key[:500], repeats=sent[key])
-            if report is not None:
-                status = "finished"
-                break
-        if status is None and state == "warn":
-            messages.append({"role": "user", "content": WARNING})
-            log.emit(spec.name, "budget_warning", used=budget.used, limit=budget.limit)
-
+    except asyncio.CancelledError:  # the team stopped this agent (idle grace, deadlock, timeout)
+        status, reason = "stopped", "cancelled"
     if status != "finished":
         log.emit(spec.name, "stopped", status=status, reason=reason)
     return AgentOutcome(spec.name, status, report, budget.used, turns, messages)

@@ -1,7 +1,9 @@
 """Test doubles: a local stand-in for a Harbor environment, scripted-result helpers and fake Services."""
 
 import asyncio
+import os
 import re
+import signal
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -39,12 +41,16 @@ class LocalEnvironment:
         self.commands.append(command)
         proc = await asyncio.create_subprocess_exec(
             "bash", "-c", self._rewrite(command), cwd=self._rewrite(cwd) if cwd else str(self.root),
-            env=None if env is None else {**__import__("os").environ, **env},
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+            env={"PATH": os.environ["PATH"], "HOME": str(self.root), "LANG": "C.UTF-8", **(env or {})},  # a sandbox does not inherit the harness env
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, start_new_session=True)
         try:
             out, err = await asyncio.wait_for(proc.communicate(), timeout_sec)
-        except TimeoutError:
-            proc.kill()
+        except (TimeoutError, asyncio.CancelledError):
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)  # the command's children too, like a sandbox teardown
+            except ProcessLookupError:
+                pass
+            await proc.communicate()
             raise
         return ExecResult(out.decode(errors="replace"), err.decode(errors="replace"), proc.returncode)
 
@@ -61,10 +67,10 @@ class LocalEnvironment:
         shutil.copy(source_path, dst)
 
 
-def call(name: str, id: str | None = None, **args) -> ToolCall:
+def call(tool: str, /, _id: str | None = None, **args) -> ToolCall:
     import json
     raw = json.dumps(args)
-    return ToolCall(id or f"c-{name}-{abs(hash(raw)) % 10**6}", name, args, raw)
+    return ToolCall(_id or f"c-{tool}-{abs(hash(raw)) % 10**6}", tool, args, raw)
 
 
 def result(content: str = "", calls=(), reasoning: str = "", p: int = 10, c: int = 5) -> ChatResult:
