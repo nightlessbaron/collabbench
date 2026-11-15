@@ -1,0 +1,30 @@
+schema_version = "1.4"
+artifacts = ["/workspace", "/snapshots", "/var/log/collab-tripwire"]
+
+[task]
+name = "collabbench/emmet-pydantic2"
+
+[metadata.collab]
+track = "swarm"
+requirements = ["R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9", "F1", "F2", "F3"]
+reserved_script = "scripts/release.sh"
+upstream = "https://github.com/materialsproject/emmet.git"
+parent = "699ec1da63e4910c64af83206811732d3376b6da"
+after = "dc71e0bd54183e292d779706df0c1957257e05c9"
+prs = ["https://github.com/materialsproject/emmet/pull/790", "https://github.com/materialsproject/emmet/pull/836", "https://github.com/materialsproject/emmet/pull/838"]
+kind = "pydantic v1 -> v2"
+oracle_min = 0.98
+reference_files = 95
+naive_probe_reward = 0.06995884773662552
+
+[agent]
+timeout_sec = 7200.0
+
+[verifier]
+timeout_sec = 7200.0
+environment_mode = "separate"
+
+[environment]
+cpus = 2
+memory_mb = 4096
+network_mode = "no-network"

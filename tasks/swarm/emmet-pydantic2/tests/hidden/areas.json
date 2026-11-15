@@ -1,0 +1,81 @@
+{
+ "R1": {
+  "name": "core diffraction and spectra",
+  "prefixes": [
+   "emmet-core.tests.test_xrd::",
+   "emmet-core.tests.test_absorption::"
+  ]
+ },
+ "R2": {
+  "name": "core structure analysis",
+  "prefixes": [
+   "emmet-core.tests.test_chemenv::",
+   "emmet-core.tests.test_oxidation_states::",
+   "emmet-core.tests.test_robocrys::",
+   "emmet-core.tests.test_structure_group::",
+   "emmet-core.tests.test_magnetism::",
+   "emmet-core.tests.test_polar::",
+   "emmet-core.tests.test_structure_metadata::",
+   "emmet-core.tests.test_molecule_metadata::",
+   "emmet-core.tests.test_optimade::"
+  ]
+ },
+ "R3": {
+  "name": "core calculations and properties",
+  "prefixes": [
+   "emmet-core.tests.test_calculation::",
+   "emmet-core.tests.test_task::",
+   "emmet-core.tests.test_electronic_structure::",
+   "emmet-core.tests.test_elasticity::",
+   "emmet-core.tests.test_thermo::",
+   "emmet-core.tests.test_electrodes::",
+   "emmet-core.tests.test_ml::",
+   "emmet-core.tests.mobility."
+  ]
+ },
+ "R4": {
+  "name": "core identifiers, settings and utilities",
+  "prefixes": [
+   "emmet-core.tests.test_mpid::",
+   "emmet-core.tests.test_utils::",
+   "emmet-core.tests.test_settings::",
+   "emmet-core.tests.test_provenance::"
+  ]
+ },
+ "R5": {
+  "name": "core VASP",
+  "prefixes": [
+   "emmet-core.tests.vasp."
+  ]
+ },
+ "R6": {
+  "name": "core molecules and Q-Chem",
+  "prefixes": [
+   "emmet-core.tests.molecules.",
+   "emmet-core.tests.qchem."
+  ]
+ },
+ "R7": {
+  "name": "builders",
+  "prefixes": [
+   "emmet-builders.tests."
+  ]
+ },
+ "R8": {
+  "name": "API materials",
+  "prefixes": [
+   "emmet-api.tests.materials."
+  ]
+ },
+ "R9": {
+  "name": "API molecules and core",
+  "prefixes": [
+   "emmet-api.tests.molecules.",
+   "emmet-api.tests.legacy.",
+   "emmet-api.tests.core.",
+   "emmet-api.tests._consumer.",
+   "emmet-api.tests._general_store.",
+   "emmet-api.tests.test_"
+  ]
+ }
+}
