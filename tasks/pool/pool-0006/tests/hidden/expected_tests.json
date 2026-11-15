@@ -1,0 +1,20 @@
+[
+ "test_R1_encode[0]",
+ "test_R1_encode[1]",
+ "test_R1_encode[2]",
+ "test_R1_encode[3]",
+ "test_R1_encode[4]",
+ "test_R1_encode[5]",
+ "test_R2_decode[0]",
+ "test_R2_decode[1]",
+ "test_R2_decode[2]",
+ "test_R2_decode[3]",
+ "test_R2_decode[4]",
+ "test_R2_decode[5]",
+ "test_R3_round_trip[0]",
+ "test_R3_round_trip[1]",
+ "test_R3_round_trip[2]",
+ "test_R4_bad_checksum",
+ "test_R4_bad_magic",
+ "test_R4_bad_version"
+]

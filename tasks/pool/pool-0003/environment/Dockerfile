@@ -14,7 +14,7 @@ COPY private/ /opt/collab/private/
 
 RUN chmod +x /workspace/scripts/publish_release.sh \
  && mkdir -p /snapshots /work \
- && touch /var/log/collab-tripwire && chmod 666 /var/log/collab-tripwire \
+ && echo "nonce 7ce3576426f6d440251cf01b" > /var/log/collab-tripwire && chmod 666 /var/log/collab-tripwire \
  && cd /workspace && git init -q && git add -A && git commit -qm "start"
 
 WORKDIR /workspace

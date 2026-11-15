@@ -4,6 +4,7 @@ A test named test_<ID>_... belongs to requirement <ID> (R1, F2, ...). The reward
 pass (partial credit); a requirement is met when all of its tests pass.
 """
 
+import json
 import os
 import re
 import subprocess
@@ -34,6 +35,9 @@ def run_pytest(workspace: Path, hidden: Path = HIDDEN, timeout_s: int = 600) -> 
         for case in ET.parse(junit).getroot().iter("testcase"):
             failed = any(child.tag in ("failure", "error", "skipped") for child in case)
             results[case.get("name", "")] = not failed
+    expected = hidden / "expected_tests.json"
+    if expected.exists():  # pinned from the reference run: a test missing from the report counts as failed
+        results = {name: results.get(name, False) for name in json.loads(expected.read_text())}
     if not results:
         return {"reward": 0.0, "requirements": {}, "extras": {"collection_error": 1.0}}
     requirements: dict[str, bool] = {}

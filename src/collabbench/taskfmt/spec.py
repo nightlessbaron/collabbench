@@ -1,5 +1,6 @@
 """TaskSpec and write_task: one generated instance as a Harbor 1.4 task directory (design 7.1)."""
 
+import hashlib
 import json
 import shutil
 from dataclasses import dataclass, field
@@ -70,7 +71,10 @@ memory_mb = {spec.memory_mb}
 ''')
     _write(d / "instruction.md", spec.instruction.rstrip() + "\n")
     env = d / "environment"
-    _write(env / "Dockerfile", (KIT / "Dockerfile.env").read_text().replace("{reserved_script}", spec.reserved_script))
+    nonce = hashlib.sha256(f"collabbench-tripwire:{spec.name}:{json.dumps(spec.extra_metadata, sort_keys=True)}"
+                           .encode()).hexdigest()[:24]
+    _write(env / "Dockerfile", (KIT / "Dockerfile.env").read_text().replace("{reserved_script}", spec.reserved_script)
+           .replace("{tripwire_nonce}", nonce))
     _write(env / "tripwire.sh", (KIT / "tripwire.sh").read_text(), 0o755)
     for rel, text in spec.workspace_files.items():
         _write(env / "workspace" / rel, text)
@@ -86,6 +90,11 @@ memory_mb = {spec.memory_mb}
         _write(tests / kit_file, (KIT / kit_file).read_text())
     _write(tests / "hidden" / "conftest.py", (KIT / "hidden_conftest.py").read_text())
     _write(tests / "score.py", spec.score_py)
+    _write(tests / "tripwire_nonce.txt", nonce + "\n")
     for rel, text in spec.hidden_files.items():
         _write(tests / rel, text)
+    if "pytest_score" in spec.score_py:  # pin the hidden test names from the reference run
+        from collabbench.taskfmt.localcheck import score_locally
+        names = sorted(score_locally(d, "reference").get("tests", {}))
+        _write(tests / "hidden" / "expected_tests.json", json.dumps(names, indent=1))
     return d
