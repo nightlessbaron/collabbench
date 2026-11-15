@@ -47,7 +47,7 @@ same 3M-token budget per agent. Results are added here as they finish; each row 
 | Claude Opus 5.5 | cohort-s4 | team of three | *running* | | | | | |
 | Claude Opus 5.5 | fiscal-s4 | one agent | **0.975** | no | 1.28M | 10 | 1 | 2 of 30: R2, p6 |
 | Claude Opus 5.5 | fiscal-s4 | team of three | **0.971** | no | 0.92M | 9 | 2 | 2 of 30: R2, p6 |
-| Claude Opus 5.5 | poe-s1 | one agent | *running* | | | | | |
+| Claude Opus 5.5 | poe-s1 | one agent | **0.787** | no | 2.94M | 11 | 1 | 2 of 15: u03, u43 |
 | Claude Opus 5.5 | poe-s1 | team of three | *running* | | | | | |
 | GPT-6.1 sol (high) | aldol-s4 | one agent | **0.993** | no | 0.28M | 6 | 1 | 2 of 30: R1, x2 |
 | GPT-6.1 sol (high) | aldol-s4 | team of three | **1.000** | yes | 1.20M | 6 | 3 | 0 of 30: none |
@@ -55,7 +55,7 @@ same 3M-token budget per agent. Results are added here as they finish; each row 
 | GPT-6.1 sol (high) | cohort-s4 | team of three | *running* | | | | | |
 | GPT-6.1 sol (high) | fiscal-s4 | one agent | **0.875** | no | 0.64M | 10 | 1 | 6 of 30: R2, a8, p1, p4, p5, p6 |
 | GPT-6.1 sol (high) | fiscal-s4 | team of three | **0.878** | no | 1.87M | 10 | 3 | 6 of 30: R2, a8, p1, p4, p5, p6 |
-| GPT-6.1 sol (high) | poe-s1 | one agent | *running* | | | | | |
+| GPT-6.1 sol (high) | poe-s1 | one agent | **1.000** | yes | 1.25M | 13 | 1 | 0 of 15: none |
 | GPT-6.1 sol (high) | poe-s1 | team of three | *running* | | | | | |
 <!-- FRONTIER:END -->
 
