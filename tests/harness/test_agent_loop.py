@@ -65,7 +65,8 @@ async def test_warning_injected_at_90_percent(tmp_path):
     _, log, services, spec = setup(tmp_path, budget=1000)
 
     def second(msgs):
-        assert any(m["role"] == "user" and "10%" in m["content"] for m in msgs)
+        assert any(m["role"] == "user" and "call finish" in m["content"] and "turns" in m["content"]
+                   for m in msgs)
         return result(calls=[call("finish", report=REPORT)])
 
     client = ScriptedClient([result(calls=[call("bash", command="true")], p=900, c=5), second])

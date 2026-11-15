@@ -18,8 +18,8 @@ MODEL_LIMIT = 1_000_000  # compaction threshold when context_cap is None
 SILENT_LIMIT = 3  # replies in a row without a tool call before the agent is stopped
 COMMAND_REPEATS = 5  # the same command this many times in a row is a loop
 MESSAGE_REPEATS = 3  # the same message text this many times is a loop
-WARNING = ("[harness] You have used 90% of your token budget; about 10% is left. Wrap up now and call finish with your "
-           "report.")
+WARNING = ("[harness] Your token budget is nearly used: about {turns} more turns at your current context size. "
+           "Wrap up now and call finish with your report.")
 NUDGE = "[harness] Reply with a tool call. When you are done, call finish with your report."
 REQUIREMENT_STATES = {"met", "not_met", "unsure"}
 
@@ -140,7 +140,8 @@ async def run_agent(spec: AgentSpec, client: ChatClient, services: Services, log
                     status = "finished"
                     break
             if status is None and state == "warn":
-                messages.append({"role": "user", "content": WARNING})
+                per_call = res.prompt_tokens + res.completion_tokens
+                messages.append({"role": "user", "content": WARNING.format(turns=budget.turns_left(per_call))})
                 log.emit(spec.name, "budget_warning", used=budget.used, limit=budget.limit)
 
     except asyncio.CancelledError:  # the team stopped this agent (idle grace, deadlock, timeout)
