@@ -34,10 +34,12 @@ def run_pytest(workspace: Path, hidden: Path = HIDDEN, timeout_s: int = 600) -> 
             return {"reward": 0.0, "requirements": {}, "extras": {"timeout": 1.0}}
         if run.returncode not in (0, 1) or not junit.exists():  # 0 all passed, 1 some failed; else not a scoring
             return {"reward": 0.0, "requirements": {}, "extras": {"collection_error": 1.0}}
-        results = {}
+        results, failures = {}, {}
         for case in ET.parse(junit).getroot().iter("testcase"):
-            failed = any(child.tag in ("failure", "error", "skipped") for child in case)
-            results[case.get("name", "")] = not failed
+            bad = [child for child in case if child.tag in ("failure", "error", "skipped")]
+            results[case.get("name", "")] = not bad
+            if bad:  # why, for details.json (never shown to the agents)
+                failures[case.get("name", "")] = (bad[0].get("message") or bad[0].text or bad[0].tag)[:500]
     if pinned is not None:  # pinned from the reference run: a test missing from the report counts as failed
         results = {name: results.get(name, False) for name in pinned}
     if not results:
@@ -49,4 +51,4 @@ def run_pytest(workspace: Path, hidden: Path = HIDDEN, timeout_s: int = 600) -> 
             requirements[m.group(1)] = requirements.get(m.group(1), True) and ok
     return {"reward": sum(results.values()) / len(results), "requirements": requirements,
             "extras": {"tests_passed": float(sum(results.values())), "tests_total": float(len(results))},
-            "tests": results}
+            "tests": results, "failures": {name: why for name, why in failures.items() if name in results}}

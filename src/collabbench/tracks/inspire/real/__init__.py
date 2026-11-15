@@ -75,7 +75,7 @@ def score(workspace: Path) -> dict:
     if PROBE:
         extras["probe"] = _rate(probe)
     return {{"reward": 0.5 * task_score + 0.5 * gap_score, "requirements": requirements, "extras": extras,
-            "tests": tests}}
+            "tests": tests, "failures": out.get("failures") or {{}}}}
 '''
 
 

@@ -536,13 +536,20 @@ def test_live_hostile_agent_program_is_contained(tmp_path, name):
                    check=True, timeout=3600)
     trial = parse_trial(next((jobs / "hostile").glob("*/result.json")).parent)
     rewards = trial["rewards"]
+    final = json.loads((Path(trial["dir"]) / "verifier" / "details.json").read_text())["final"]
     assert trial["exception"] is None and "pwned" not in rewards and rewards["isolated"] == 1
     assert not rewards.get("tests_tampered") and not rewards.get("verifier_error")
     assert rewards["agent_processes_left"] == 0 and not rewards.get("agent_processes_survived")
-    if name == cif_canon.NAME:  # the reference library could not be read
-        assert rewards["req_D1"] == 0 and rewards["reward"] <= 0.05
-    else:  # build_catalog's output, linked to /tests/hidden, was not read as its output
-        assert rewards["req_D2"] == 0
+    # I2's proof that agent code really ran as UID 64000: no test failed on a launch error (a failed UID drop or
+    # limit would raise in run_agent), and files the programs left were read back through the UID helper.
+    launch_errors = ("PermissionError", "preexec_fn", "SubprocessError", "refusing to run", "Operation not permitted")
+    assert not [n for n, why in final["failures"].items() if any(e in why for e in launch_errors)], final["failures"]
+    if name == cif_canon.NAME:  # it ran, printed its own `{}`, and could not read the reference library
+        assert final["tests"]["test_D1_present"] and final["tests"]["test_D2_present"]
+        assert final["failures"]["test_D1_visible"] and rewards["req_D1"] == 0 and rewards["reward"] <= 0.05
+    else:  # the reference reader ran as the UID; build_catalog's out/ -> /tests/hidden was not read as output
+        assert rewards["req_D1"] == 1 and rewards["req_D3"] == 1 and rewards["req_D2"] == 0
+        assert not final["tests"]["test_D2_build_catalog_notation"]
 
 
 # --- reproducibility ------------------------------------------------------------------------------------------------

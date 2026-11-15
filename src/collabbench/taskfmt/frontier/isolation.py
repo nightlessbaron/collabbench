@@ -17,10 +17,17 @@ A task opts in by naming a dedicated unprivileged UID in tests/agent_uid. The in
 - popen_kwargs(uid) -> Popen arguments that run a program as the UID and GID, with no supplementary groups and LIMITS
   set after the drop (processes, so a fork bomb stops; file size; no core dumps).
 - become_subreaper() -> orphaned descendants of this process are reparented to it, not to init.
-- reap(uid) -> kill every descendant of this process and, with a UID (root only), every process of that UID, race-free:
-  a forked child becomes the UID and sends kill(-1, SIGKILL). The kernel walks the whole process list for kill(-1)
-  under its tasklist lock, and a fork with SIGKILL pending fails, so no process of the UID, nor a child it is forking,
-  escapes. Returns (found, survivors); a caller must treat survivors as a failed grade.
+- reap(uid) -> kill every descendant of this process and, with a UID (root only), every process of that UID: a forked
+  helper acting as the UID sends kill(-1, SIGKILL), root kills what a /proc scan still finds, and this repeats until
+  CLEAN_ROUNDS rounds in a row find nothing (or wait_s passes). On Linux one kill(-1) is atomic against fork (the
+  kernel walks the process list under its tasklist lock, and a fork with SIGKILL pending fails). gVisor, which Modal
+  runs, signals a snapshot of the list, so there a fork-and-exit chain can slip one pass; the remaining window is a
+  chain that slips two kill passes and two scans in a row. Such a survivor runs as the UID, so it can touch neither
+  the tests nor the output directory. Returns (found, survivors); a caller must treat survivors as a failed grade.
+- Helpers that act as the UID (the kill, read_under, probe) run in forked children, and every wait on them is
+  bounded (KILL_WAIT_S, READ_WAIT_S, PROBE_WAIT_S): past it the child is killed as root. The kill and read helpers
+  take the UID only as their effective UID: their real and saved UID is a spare one (uid + 1, which nothing runs as),
+  so no agent process can signal them (a SIGSTOP loop cannot stall grading).
 - give(path, uid) -> hand a fresh run directory (filled by root) and everything in it to the UID; the only chown to
   the UID there is.
 - copy_tree(src, dst, root_owned) -> the one symlink policy: the tree agent programs run from holds directories and
@@ -30,15 +37,18 @@ A task opts in by naming a dedicated unprivileged UID in tests/agent_uid. The in
   directory the grader trusts (the agent may control everything inside it). The path is walked from `root` one
   component at a time without following anything (O_DIRECTORY | O_NOFOLLOW per directory; O_NOFOLLOW | O_NONBLOCK
   for the file), and `..`, `.`, empty and absolute paths, symlinks anywhere on the path, non-regular files (a FIFO is
-  refused at once), hard-linked files and files on another device are refused. At most `limit` bytes. With `uid`
-  (root only; or this user's own UID) the whole read runs in a child that has become that UID, so it can never read
-  more than the agent could: the tests are closed to it.
+  refused at once) and hard-linked files are refused. (Not a device check: on an overlay root filesystem a directory
+  reports the overlay's device and a file its layer's, and the agent cannot mount anything.) At most `limit` bytes.
+  With `uid` (root only; or this user's own UID) the whole read runs in a helper with that UID's file rights, so it
+  can never read more than the agent could: the tests are closed to it. A read that does not finish in time raises
+  ValueError, so that output fails; it is never a verifier error.
 """
 
 import ctypes
 import json
 import os
 import resource
+import select
 import shutil
 import signal
 import stat
@@ -48,6 +58,10 @@ from pathlib import Path
 UID_FILE = "agent_uid"
 LOCAL_ENV = "COLLAB_LOCAL_GRADING"
 LIMITS = {resource.RLIMIT_NPROC: 512, resource.RLIMIT_FSIZE: 1 << 30, resource.RLIMIT_CORE: 0}
+KILL_WAIT_S, KILL_ATTEMPTS = 2.0, 3  # a UID-wide kill helper: per attempt
+READ_WAIT_S, READ_ATTEMPTS = 3.0, 2  # a read helper: per attempt; then that output fails
+PROBE_WAIT_S = 10.0
+CLEAN_ROUNDS = 2  # kill-and-scan rounds in a row that must find nothing (gVisor: see reap)
 
 
 def agent_uid(tests) -> int | None:
@@ -149,7 +163,6 @@ def _components(rel) -> list[str]:
 def _walk_read(root, parts: list[str], limit: int) -> bytes:
     fds = [os.open(root, os.O_RDONLY | os.O_DIRECTORY)]
     try:
-        device = os.fstat(fds[0]).st_dev
         for part in parts[:-1]:
             fds.append(os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fds[-1]))
         fd = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=fds[-1])
@@ -157,8 +170,8 @@ def _walk_read(root, parts: list[str], limit: int) -> bytes:
         info = os.fstat(fd)
         if not stat.S_ISREG(info.st_mode):
             raise ValueError(f"{'/'.join(parts)} is not a regular file")
-        if info.st_nlink != 1 or info.st_dev != device:
-            raise ValueError(f"{'/'.join(parts)} is linked from elsewhere")
+        if info.st_nlink != 1:  # the same inode also lives outside the walk
+            raise ValueError(f"{'/'.join(parts)} is hard-linked")
         chunks, left = [], limit
         while left > 0:
             chunk = os.read(fd, min(left, 1 << 20))
@@ -172,17 +185,92 @@ def _walk_read(root, parts: list[str], limit: int) -> bytes:
             os.close(fd)
 
 
-def read_under(root, rel, limit: int = 64 << 20, uid: int | None = None) -> bytes:
+def read_under(root, rel, limit: int = 64 << 20, uid: int | None = None, spare: int | None = None) -> bytes:
     parts = _components(rel)
     if uid is None:
         return _walk_read(root, parts, limit)
+    for _ in range(READ_ATTEMPTS):
+        data = _in_helper(lambda: _walk_read(root, parts, limit), uid, _spare(uid, spare), READ_WAIT_S)
+        if data is not None:
+            return data
+    raise ValueError(f"{rel}: the read timed out")
+
+
+# --- the agent UID --------------------------------------------------------------------------------------------------
+
+def _drop_groups() -> None:
+    try:
+        os.setgroups([])
+    except PermissionError:
+        try:  # only where nobody may change groups (an unprivileged user namespace): the groups are then inert
+            denied = Path("/proc/self/setgroups").read_text().strip() == "deny"
+        except OSError:
+            denied = False
+        if not denied:
+            raise
+
+
+def _spare(uid: int, spare: int | None) -> int:
+    return uid + 1 if spare is None else spare
+
+
+def _become(uid: int, spare: int | None = None) -> None:
+    """In a forked child of root: take `uid`'s rights, with no supplementary groups. With `spare`, only as the
+    effective (and file-system) UID and GID: the real and saved IDs become `spare`, a UID no process runs as. Files
+    are then opened, and signals sent, with `uid`'s rights, but no process of `uid` can signal or trace this one
+    (Linux and gVisor let a process signal another only when its real or effective UID matches the target's real or
+    saved UID). Unprivileged, only the current user's own UID is accepted, and nothing changes."""
+    if os.geteuid() != 0:
+        if uid != os.getuid():
+            raise PermissionError(f"cannot become UID {uid} without root")
+        return
+    _drop_groups()
+    if spare is None:
+        os.setgid(uid)
+        os.setuid(uid)
+    else:
+        os.setresgid(spare, uid, spare)
+        os.setresuid(spare, uid, spare)
+
+
+def _wait(pid: int, seconds: float):
+    """The child's wait status, or None if it has not ended within `seconds` (never a blocking wait)."""
+    end = time.monotonic() + seconds
+    while True:
+        try:
+            done, status = os.waitpid(pid, os.WNOHANG)
+        except ChildProcessError:
+            return 0
+        if done:
+            return status
+        if time.monotonic() > end:
+            return None
+        time.sleep(0.002)
+
+
+def _finish(pid: int, seconds: float):
+    """Wait for a helper child at most `seconds`; then kill it as root (stopped or not) and wait as long again."""
+    status = _wait(pid, seconds)
+    if status is None:
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        status = _wait(pid, seconds)
+    return status
+
+
+def _in_helper(work, uid: int, spare: int | None, seconds: float) -> bytes | None:
+    """Run `work()` (returning bytes) in a forked child that has become `uid` (see _become), and return its bytes;
+    None when they did not arrive within `seconds` (the child is then killed as root). The child's own error is
+    raised here as ValueError."""
     read, write = os.pipe()
     pid = os.fork()
     if pid == 0:
         os.close(read)
         try:
-            _drop(uid)
-            payload = b"0" + _walk_read(root, parts, limit)
+            _become(uid, spare)
+            payload = b"0" + work()
         except BaseException as e:  # noqa: BLE001 - reported to the parent, which raises
             payload = b"1" + f"{type(e).__name__}: {e}".encode()
         try:
@@ -192,30 +280,30 @@ def read_under(root, rel, limit: int = 64 << 20, uid: int | None = None) -> byte
         finally:
             os._exit(0)
     os.close(write)
-    with os.fdopen(read, "rb") as reader:
-        payload = reader.read()
-    os.waitpid(pid, 0)
+    chunks, complete, end = [], False, time.monotonic() + seconds
+    try:
+        while time.monotonic() < end:
+            ready, _, _ = select.select([read], [], [], min(0.5, max(0.0, end - time.monotonic())))
+            if ready:
+                chunk = os.read(read, 1 << 20)
+                if not chunk:
+                    complete = True
+                    break
+                chunks.append(chunk)
+    finally:
+        os.close(read)
+    if not complete:
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    _finish(pid, 1.0)
+    if not complete:
+        return None
+    payload = b"".join(chunks)
     if payload[:1] == b"0":
         return payload[1:]
-    raise ValueError(f"{rel}: " + (payload[1:].decode("utf-8", "replace") or "the reader died"))
-
-
-# --- the agent UID --------------------------------------------------------------------------------------------------
-
-def _drop(uid: int, groups: bool = True) -> None:
-    """In a forked child: become `uid` (real, effective and saved) in group `uid`, with no supplementary groups.
-    Unprivileged, only the current user's own UID is accepted (and nothing changes)."""
-    if os.geteuid() != 0:
-        if uid != os.getuid():
-            raise PermissionError(f"cannot become UID {uid} without root")
-        return
-    try:
-        os.setgroups([])
-    except PermissionError:
-        if groups:
-            raise
-    os.setgid(uid)
-    os.setuid(uid)
+    raise ValueError(payload[1:].decode("utf-8", "replace") or "the helper died")
 
 
 def apply_limits() -> None:
@@ -235,42 +323,36 @@ def probe(uid: int, tests, unwritable=()) -> list[str]:
     for dirpath, dirnames, filenames in os.walk(tests, followlinks=False):
         dirs += [Path(dirpath) / n for n in dirnames]
         files += [Path(dirpath) / n for n in filenames]
-    read, write = os.pipe()
-    pid = os.fork()
-    if pid == 0:
-        os.close(read)
+
+    def attempt() -> bytes:
         leaks = []
-        try:
-            _drop(uid)
-            for d in dirs:
-                try:
-                    os.listdir(d)
-                    leaks.append(f"list {d}")
-                except OSError:
-                    pass
-            for f in files:
-                try:
-                    os.close(os.open(f, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK))
-                    leaks.append(f"read {f}")
-                except OSError:
-                    pass
-            for d in [tests, *map(Path, unwritable)]:
-                target = d / f".isolation-probe-{os.getpid()}"
-                try:
-                    os.close(os.open(target, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600))
-                    os.unlink(target)
-                    leaks.append(f"write {d}")
-                except OSError:
-                    pass
-        except BaseException as e:  # noqa: BLE001 - a probe that cannot run is a leak, never a pass
-            leaks = [f"probe failed: {type(e).__name__}: {e}"]
-        os.write(write, json.dumps(leaks).encode())
-        os._exit(0)
-    os.close(write)
-    with os.fdopen(read, "rb") as reader:
-        data = reader.read()
-    os.waitpid(pid, 0)
-    return json.loads(data) if data else ["probe died"]
+        for d in dirs:
+            try:
+                os.listdir(d)
+                leaks.append(f"list {d}")
+            except OSError:
+                pass
+        for f in files:
+            try:
+                os.close(os.open(f, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK))
+                leaks.append(f"read {f}")
+            except OSError:
+                pass
+        for d in [tests, *map(Path, unwritable)]:
+            target = d / f".isolation-probe-{os.getpid()}"
+            try:
+                os.close(os.open(target, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600))
+                os.unlink(target)
+                leaks.append(f"write {d}")
+            except OSError:
+                pass
+        return json.dumps(leaks).encode()
+
+    try:  # as the UID itself (real and effective): exactly the agent's access; no agent process exists yet
+        data = _in_helper(attempt, uid, None, PROBE_WAIT_S)
+    except ValueError as e:  # a probe that cannot run is a leak, never a pass
+        return [f"probe failed: {e}"]
+    return json.loads(data) if data is not None else ["probe timed out"]
 
 
 # --- processes ------------------------------------------------------------------------------------------------------
@@ -324,28 +406,30 @@ def _collect_zombies() -> None:
             return
 
 
-def _kill_uid(uid: int) -> None:
-    """Fork a child that becomes `uid` and sends SIGKILL to every process it may signal; return once it is done.
-    Root only: unprivileged, kill(-1) would reach every process of the current user."""
+def _kill_uid(uid: int, spare: int | None = None) -> bool:
+    """Fork a helper that acts as `uid` (real UID `spare`, so no process of `uid` can stop it) and sends SIGKILL to
+    every process it may signal. Every wait is bounded: a helper that has not finished within KILL_WAIT_S is killed
+    as root and the kill retried, up to KILL_ATTEMPTS times. True once a helper finished its kill. Root only:
+    unprivileged, kill(-1) would reach every process of the current user."""
     if os.geteuid() != 0:
         raise PermissionError("the UID-wide kill needs root")
-    pid = os.fork()
-    if pid == 0:
-        try:
-            _drop(uid, groups=False)  # signalling needs the UID, not the groups
-            for _ in range(2):
+    for _ in range(KILL_ATTEMPTS):
+        pid = os.fork()
+        if pid == 0:
+            try:
+                _become(uid, _spare(uid, spare))
+            except BaseException:  # noqa: BLE001 - never signal as root
+                os._exit(1)
+            try:
                 os.kill(-1, signal.SIGKILL)
-        except BaseException:  # noqa: BLE001 - ESRCH: nothing left to signal; anything else: never kill as root
-            pass
-        os._exit(0)
-    while True:
-        try:
-            os.waitpid(pid, 0)
-            return
-        except ChildProcessError:
-            return
-        except InterruptedError:
-            continue
+                os.kill(-1, signal.SIGKILL)
+            except BaseException:  # noqa: BLE001 - ESRCH: nothing left to signal (gVisor reports it)
+                pass
+            os._exit(0)
+        status = _finish(pid, KILL_WAIT_S)
+        if status is not None and os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0:
+            return True
+    return False
 
 
 def reap(uid: int | None = None, wait_s: float = 10.0) -> tuple[int, int]:
@@ -353,22 +437,23 @@ def reap(uid: int | None = None, wait_s: float = 10.0) -> tuple[int, int]:
         raise ValueError(f"refusing to sweep UID {uid}")
     _collect_zombies()
     found = _alive(uid)
-    if uid is not None:
-        _kill_uid(uid)
     end = time.monotonic() + wait_s
+    needed, clean = (CLEAN_ROUNDS if uid is not None else 1), 0
     while True:
-        _collect_zombies()
-        alive = _alive(uid)
-        found |= alive
-        if not alive:
-            return len(found), 0
-        if time.monotonic() > end:
-            return len(found), len(alive)
         if uid is not None:
             _kill_uid(uid)
-        for pid in alive:
+        for pid in _alive(uid):
             try:
                 os.kill(pid, signal.SIGKILL)
             except (ProcessLookupError, PermissionError):
                 pass
-        time.sleep(0.01)
+        if found or uid is not None:
+            time.sleep(0.01)
+        _collect_zombies()
+        alive = _alive(uid)
+        found |= alive
+        clean = 0 if alive else clean + 1
+        if clean >= needed:
+            return len(found), 0
+        if time.monotonic() > end:
+            return len(found), len(alive)

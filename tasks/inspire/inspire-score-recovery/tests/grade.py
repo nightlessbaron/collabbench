@@ -62,7 +62,8 @@ def score_one(workspace: Path) -> dict:
     out = score.score(Path(workspace))
     return {"reward": float(out.get("reward", 0.0)), "requirements": {k: bool(v) for k, v in
                                                                       out.get("requirements", {}).items()},
-            "extras": {k: float(v) for k, v in out.get("extras", {}).items()}, "tests": out.get("tests", {})}
+            "extras": {k: float(v) for k, v in out.get("extras", {}).items()}, "tests": out.get("tests", {}),
+            "failures": out.get("failures", {})}
 
 
 def safe_score(workspace: Path, timeout_s: float = SCORE_TIMEOUT_S) -> dict:

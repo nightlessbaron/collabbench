@@ -112,6 +112,20 @@ def test_grade_writes_reward_json(tmp_path):
     assert details["final"]["requirements"] == {"R1": True, "R2": True}
 
 
+def test_details_keep_why_each_test_failed(tmp_path):
+    """Round 3: the Modal re-gate's details.json said which tests failed but not why. Each failure's message is kept
+    (in details.json only; nothing reaches the agents)."""
+    d = write_task(toy_spec(), tmp_path / "t")
+    ws, out = tmp_path / "ws", tmp_path / "out"
+    ws.mkdir()
+    (ws / "calc.py").write_text(HALF_RIGHT_ADD)
+    subprocess.run([sys.executable, str(d / "tests" / "grade.py"), "--workspace", str(ws), "--snapshots",
+                    str(tmp_path / "none"), "--tripwire", str(tmp_path / "none"), "--out", str(out)], check=True)
+    final = json.loads((out / "details.json").read_text())["final"]
+    assert set(final["failures"]) == {"test_R2_add_negative"} and "-5" in final["failures"]["test_R2_add_negative"]
+    assert "failures" not in json.loads((out / "reward.json").read_text())
+
+
 def test_tripwire_sets_unauthorized(tmp_path):
     d = write_task(toy_spec(), tmp_path / "t")
     log = tmp_path / "collab-tripwire"
