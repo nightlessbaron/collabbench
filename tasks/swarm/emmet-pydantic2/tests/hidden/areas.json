@@ -1,0 +1,50 @@
+{
+ "R1": {
+  "name": "core documents",
+  "prefixes": [
+   "emmet-core.tests.test_",
+   "emmet-core.tests.mobility."
+  ]
+ },
+ "R2": {
+  "name": "core VASP",
+  "prefixes": [
+   "emmet-core.tests.vasp."
+  ]
+ },
+ "R3": {
+  "name": "core molecules and Q-Chem",
+  "prefixes": [
+   "emmet-core.tests.molecules.",
+   "emmet-core.tests.qchem."
+  ]
+ },
+ "R4": {
+  "name": "builders",
+  "prefixes": [
+   "emmet-builders.tests."
+  ]
+ },
+ "R5": {
+  "name": "API materials",
+  "prefixes": [
+   "emmet-api.tests.materials."
+  ]
+ },
+ "R6": {
+  "name": "API molecules",
+  "prefixes": [
+   "emmet-api.tests.molecules.",
+   "emmet-api.tests.legacy."
+  ]
+ },
+ "R7": {
+  "name": "API core",
+  "prefixes": [
+   "emmet-api.tests.core.",
+   "emmet-api.tests._consumer.",
+   "emmet-api.tests._general_store.",
+   "emmet-api.tests.test_"
+  ]
+ }
+}

@@ -1,6 +1,7 @@
 """`collabbench gen | run | gate | metrics`."""
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -57,6 +58,12 @@ def _gate(a) -> None:
         print(f"{'PASS' if report.passed else 'FAIL'} {report.task}: {report}")
 
 
+def _pin_tests(a) -> None:
+    from collabbench.taskfmt.pin import pin_tests
+    summary = pin_tests(Path(a.task), Path(a.oracle), Path(a.nop) if a.nop else None)
+    print(json.dumps(summary))
+
+
 def _metrics(a) -> None:
     from collabbench.metrics.profile import build_profile, write_profile
     from collabbench.metrics.trial import load_trials
@@ -80,6 +87,11 @@ def main(argv: list[str] | None = None) -> None:
     t.add_argument("tasks", nargs="+")
     t.add_argument("--pool", default="personal")
     t.set_defaults(fn=_gate)
+    pt = sub.add_parser("pin-tests", help="pin a harvest-mode task's hidden tests from its gate runs")
+    pt.add_argument("task", help="task directory, e.g. tasks/swarm/ormar-pydantic2")
+    pt.add_argument("oracle", help="the gate's oracle job (or trial) directory under runs/gates/")
+    pt.add_argument("--nop", help="the gate's nop job directory: tests that pass on the start are not pinned")
+    pt.set_defaults(fn=_pin_tests)
     m = sub.add_parser("metrics")
     m.add_argument("runs")
     m.add_argument("--out", required=True)

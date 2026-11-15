@@ -41,7 +41,8 @@ def parse_trial(trial_dir: Path) -> dict:
             "exception": (r.get("exception_info") or {}).get("exception_type"), "dir": str(trial_dir)}
 
 
-def evaluate_gate(task: str, track: str, oracle: dict, nop: dict, probe: dict) -> GateReport:
+def evaluate_gate(task: str, track: str, oracle: dict, nop: dict, probe: dict,
+                  oracle_min: float | None = None) -> GateReport:
     notes = []
     image_ok = not any(t.get("exception") for t in (oracle, nop, probe))
     if not image_ok:
@@ -49,7 +50,7 @@ def evaluate_gate(task: str, track: str, oracle: dict, nop: dict, probe: dict) -
                                                           (("oracle", oracle), ("nop", nop), ("probe", probe))
                                                           if t.get("exception")))
     o, n = oracle.get("reward"), nop.get("reward")
-    need = ORACLE_MIN.get(track, 1.0)
+    need = oracle_min if oracle_min is not None else ORACLE_MIN.get(track, 1.0)
     if o is None or o < need:
         notes.append(f"oracle reward {o} < {need}")
     if n is None or n > NOP_MAX:
@@ -74,7 +75,8 @@ def _job(task_dir: Path, agent: str, extra: list[str], jobs_dir: Path, name: str
 
 def gate_instance(task_dir: Path, pool: str = "personal", ledger: Ledger | None = None) -> GateReport:
     task_dir = Path(task_dir).resolve()
-    track = tomllib.loads((task_dir / "task.toml").read_text())["metadata"]["collab"]["track"]
+    collab = tomllib.loads((task_dir / "task.toml").read_text())["metadata"]["collab"]
+    track = collab["track"]
     ledger = ledger or Ledger(settings.REPO / "runs" / "ledger.jsonl")
     jobs_dir = settings.REPO / "runs" / "gates"
     jobs_dir.mkdir(parents=True, exist_ok=True)
@@ -99,6 +101,7 @@ def gate_instance(task_dir: Path, pool: str = "personal", ledger: Ledger | None 
         usd = trial_cost(*trial_sandbox_seconds(trials[0]))
         cost += usd
         ledger.record(pool, name, trials[0].name, usd, kind="gate", task=task_dir.name)
-    report = evaluate_gate(task_dir.name, track, results["oracle"], results["nop"], results["probe"])
+    report = evaluate_gate(task_dir.name, track, results["oracle"], results["nop"], results["probe"],
+                           collab.get("oracle_min"))
     report.cost_usd = round(cost, 4)
     return report

@@ -1,0 +1,29 @@
+schema_version = "1.4"
+artifacts = ["/workspace", "/snapshots", "/var/log/collab-tripwire"]
+
+[task]
+name = "collabbench/ormar-pydantic2"
+
+[metadata.collab]
+track = "swarm"
+requirements = ["R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "F1", "F2", "F3"]
+reserved_script = "scripts/release.sh"
+upstream = "https://github.com/ormar-orm/ormar.git"
+parent = "3a206dd8dc0fdb74bf2aacad23323a3e622ea328"
+after = "500625f0ec5af8671939e776bc53abbc03d8ad41"
+prs = ["https://github.com/ormar-orm/ormar/pull/1238"]
+kind = "pydantic v1 -> v2"
+oracle_min = 0.98
+reference_files = 66
+
+[agent]
+timeout_sec = 7200.0
+
+[verifier]
+timeout_sec = 5400.0
+environment_mode = "separate"
+
+[environment]
+cpus = 2
+memory_mb = 4096
+network_mode = "no-network"

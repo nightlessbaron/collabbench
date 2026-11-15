@@ -1,0 +1,56 @@
+{
+ "R1": {
+  "name": "model definition",
+  "prefixes": [
+   "tests.test_model_definition.",
+   "tests.test_types::"
+  ]
+ },
+ "R2": {
+  "name": "inheritance and pydantic models",
+  "prefixes": [
+   "tests.test_inheritance_and_pydantic_generation."
+  ]
+ },
+ "R3": {
+  "name": "relations",
+  "prefixes": [
+   "tests.test_relations."
+  ]
+ },
+ "R4": {
+  "name": "queries",
+  "prefixes": [
+   "tests.test_queries."
+  ]
+ },
+ "R5": {
+  "name": "dump, exclusion and deferred fields",
+  "prefixes": [
+   "tests.test_exclude_include_dict.",
+   "tests.test_deferred."
+  ]
+ },
+ "R6": {
+  "name": "FastAPI",
+  "prefixes": [
+   "tests.test_fastapi."
+  ]
+ },
+ "R7": {
+  "name": "model methods and ordering",
+  "prefixes": [
+   "tests.test_model_methods.",
+   "tests.test_ordering."
+  ]
+ },
+ "R8": {
+  "name": "signals, encryption, constraints, utilities",
+  "prefixes": [
+   "tests.test_signals.",
+   "tests.test_encryption.",
+   "tests.test_meta_constraints.",
+   "tests.test_utils."
+  ]
+ }
+}

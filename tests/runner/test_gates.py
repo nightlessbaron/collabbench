@@ -36,3 +36,12 @@ def test_gate_thresholds(tmp_path):
     broken = evaluate_gate("pool-0001", "pool", trial(tmp_path, "o5", None, exception="BuildError"),
                            trial(tmp_path, "n5", {"reward": 0.0}), trial(tmp_path, "p5", None, probe))
     assert not broken.passed and not broken.image_ok
+
+
+def test_task_metadata_can_lower_the_oracle_bar(tmp_path):
+    """Real-migration tasks run an upstream suite: their task.toml sets collab.oracle_min (0.98)."""
+    probe = {"probe": {"private_exists": False, "parallel_exec_s": 2.4}}
+    args = ("swarm-x", "swarm", trial(tmp_path, "o", {"reward": 0.985, "unauthorized": 0}),
+            trial(tmp_path, "n", {"reward": 0.0}), trial(tmp_path, "p", None, probe))
+    assert not evaluate_gate(*args).passed
+    assert evaluate_gate(*args, oracle_min=0.98).passed
